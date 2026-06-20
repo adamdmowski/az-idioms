@@ -1,1 +1,138 @@
-* { margin: 0; padding: 0; box-sizing: border-box; }
+/* ─── Reset ───────────────────────────────────── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+
+/* ─── Palette & tokens (warm blue → cream) ──── */
+:root {
+  /* Brand */
+  --color-ink: #1E3A5F;          /* deep ocean blue */
+  --color-ink-soft: #2D5F8A;     /* mid blue */
+  --color-ink-line: #94C5F0;     /* sky accent */
+
+  /* Warm cream surface */
+  --color-cream: #FFF7E8;
+  --color-cream-deep: #FBEDD0;
+  --color-paper: #FFFDF7;
+
+  /* Accents */
+  --color-sun: #F59E0B;          /* warm gold */
+  --color-sun-deep: #D97706;
+  --color-coral: #EF6F5C;        /* playful coral */
+  --color-leaf: #16A34A;         /* friendly green */
+  --color-grape: #7C3AED;        /* purple pop */
+
+  /* Neutrals */
+  --color-text: #1E293B;
+  --color-muted: #64748B;
+  --color-line: #E5E7EB;
+
+  /* Radii */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 28px;
+  --r-pill: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 2px 6px rgba(30, 58, 95, 0.08);
+  --shadow-md: 0 6px 18px rgba(30, 58, 95, 0.12);
+  --shadow-lg: 0 14px 40px rgba(30, 58, 95, 0.18);
+  --shadow-glow-sun: 0 8px 24px rgba(245, 158, 11, 0.35);
+  --shadow-glow-coral: 0 8px 24px rgba(239, 111, 92, 0.35);
+  --shadow-glow-leaf: 0 8px 24px rgba(22, 163, 74, 0.30);
+
+  /* Type */
+  --font-display: 'Fredoka', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 160ms;
+  --dur-med: 280ms;
+  --dur-slow: 520ms;
+}
+
+/* ─── Base typography ───────────────────────── */
+body {
+  font-family: var(--font-body);
+  color: var(--color-text);
+  background: var(--color-cream);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-size: 16px;
+  line-height: 1.5;
+  /* iOS safe areas (kids scanning QR on phones) */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--color-ink);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+button { font-family: inherit; }
+
+/* ─── Focus visibility ───────────────────────── */
+:focus { outline: none; }
+:focus-visible {
+  outline: 3px solid var(--color-sun);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ─── Reusable animations ────────────────────── */
+@keyframes az-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes az-pop-in {
+  0%   { opacity: 0; transform: scale(0.85); }
+  60%  { opacity: 1; transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+@keyframes az-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes az-wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25%      { transform: rotate(-4deg); }
+  75%      { transform: rotate(4deg); }
+}
+@keyframes az-pulse-ring {
+  0%   { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55); }
+  100% { box-shadow: 0 0 0 14px rgba(245, 158, 11, 0); }
+}
+
+.az-fade-in  { animation: az-fade-in var(--dur-slow) var(--ease-out) both; }
+.az-pop-in   { animation: az-pop-in var(--dur-slow) var(--ease-spring) both; }
+.az-float    { animation: az-float 3.4s var(--ease-out) infinite; }
+.az-wiggle   { animation: az-wiggle 0.6s var(--ease-out); }
+.az-pulse-ring { animation: az-pulse-ring 1.6s var(--ease-out) infinite; }
+
+/* Tap feedback for big chunky buttons */
+.az-tap {
+  transition:
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-out),
+    filter var(--dur-fast) var(--ease-out);
+}
+.az-tap:hover { transform: translateY(-2px); filter: brightness(1.04); }
+.az-tap:active { transform: translateY(1px) scale(0.985); }
+
+/* ─── Reduced motion ─────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Selection ──────────────────────────────── */
+::selection { background: var(--color-sun); color: var(--color-ink); }

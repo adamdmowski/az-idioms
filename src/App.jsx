@@ -171,7 +171,21 @@ function getWrongOptions(correctId, field, count = 3) {
   return shuffle(others).slice(0, count).map((i) => i[field]);
 }
 
+// Global mute state — read by speak() so any future sound (TTS, music, SFX) respects it.
+let _muted = false;
+try {
+  _muted = localStorage.getItem("az-idioms-muted") === "1";
+} catch (_) { /* ignore */ }
+
+function isMuted() { return _muted; }
+function setMutedGlobal(v) {
+  _muted = !!v;
+  try { localStorage.setItem("az-idioms-muted", _muted ? "1" : "0"); } catch (_) { /* ignore */ }
+  if (_muted && "speechSynthesis" in window) window.speechSynthesis.cancel();
+}
+
 function speak(text) {
+  if (_muted) return;
   if ("speechSynthesis" in window) {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
@@ -191,98 +205,203 @@ function formatTime(ms) {
 
 // ─── Sub-components ──────────────────────────
 
-function Header({ page, onNav }) {
+function Header({ page, onNav, muted, onToggleMute }) {
   return (
-    <div style={{
-      background: "linear-gradient(135deg, #1E3A5F 0%, #2D5F8A 100%)",
-      padding: "16px 20px",
+    <header style={{
+      background: "linear-gradient(135deg, var(--color-ink) 0%, var(--color-ink-soft) 100%)",
+      padding: "12px 16px",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
+      gap: 8,
       position: "sticky",
       top: 0,
       zIndex: 50,
+      boxShadow: "var(--shadow-sm)",
     }}>
-      <div
+      <button
         onClick={() => onNav("landing")}
-        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}
+        aria-label="Back to home"
+        style={{
+          background: "transparent", border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", gap: 10, padding: 4,
+        }}
       >
-        <span style={{ fontSize: 28 }}>🎨</span>
-        <div>
-          <div style={{ color: "#fff", fontWeight: 800, fontSize: 18, letterSpacing: 1 }}>AZ IDIOMS</div>
-          <div style={{ color: "#94C5F0", fontSize: 11 }}>English Idiom Explorer</div>
-        </div>
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        {["learn", "quiz-name", "leaderboard"].map((p) => {
-          const label = p === "learn" ? "Learn" : p === "quiz-name" ? "Quiz" : "Ranking";
-          const icon = p === "learn" ? "📚" : p === "quiz-name" ? "🧠" : "🏆";
+        <span
+          aria-hidden="true"
+          style={{
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 38, height: 38, borderRadius: 12,
+            background: "linear-gradient(135deg, var(--color-sun), var(--color-coral))",
+            fontSize: 22, lineHeight: 1, boxShadow: "var(--shadow-sm)",
+          }}
+        >🎨</span>
+        <span style={{ textAlign: "left", lineHeight: 1.1 }}>
+          <span style={{
+            display: "block", color: "#fff", fontFamily: "var(--font-display)",
+            fontWeight: 700, fontSize: 18, letterSpacing: "0.5px",
+          }}>AZ IDIOMS</span>
+          <span style={{ display: "block", color: "var(--color-ink-line)", fontSize: 11, fontWeight: 600 }}>
+            English Idiom Explorer
+          </span>
+        </span>
+      </button>
+
+      <nav style={{ display: "flex", alignItems: "center", gap: 4 }}>
+        {[
+          { p: "learn", label: "Learn", icon: "📚" },
+          { p: "quiz-name", label: "Quiz", icon: "🧠" },
+          { p: "leaderboard", label: "Top", icon: "🏆" },
+        ].map(({ p, label, icon }) => {
           const isActive = page === p || (p === "quiz-name" && page.startsWith("quiz"));
           return (
             <button
               key={p}
               onClick={() => onNav(p)}
+              className="az-tap"
+              aria-current={isActive ? "page" : undefined}
               style={{
-                background: isActive ? "rgba(255,255,255,0.2)" : "transparent",
+                background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
                 border: "none",
                 color: "#fff",
-                padding: "6px 12px",
-                borderRadius: 8,
+                padding: "8px 10px",
+                borderRadius: 12,
                 cursor: "pointer",
                 fontSize: 13,
-                fontWeight: isActive ? 700 : 400,
+                fontWeight: isActive ? 700 : 600,
+                display: "inline-flex", alignItems: "center", gap: 4,
               }}
             >
-              {icon} {label}
+              <span aria-hidden="true">{icon}</span>
+              <span style={{ fontFamily: "var(--font-display)" }}>{label}</span>
             </button>
           );
         })}
-      </div>
-    </div>
+        <button
+          onClick={onToggleMute}
+          aria-label={muted ? "Unmute sound" : "Mute sound"}
+          aria-pressed={muted}
+          title={muted ? "Sound off — tap to enable" : "Sound on — tap to mute"}
+          className="az-tap"
+          style={{
+            marginLeft: 4,
+            background: muted ? "rgba(239, 111, 92, 0.25)" : "rgba(255,255,255,0.18)",
+            border: muted ? "1px solid rgba(239, 111, 92, 0.6)" : "1px solid rgba(255,255,255,0.25)",
+            color: "#fff", cursor: "pointer",
+            width: 38, height: 38, borderRadius: 12,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            fontSize: 18,
+          }}
+        >
+          <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span>
+        </button>
+      </nav>
+    </header>
   );
 }
 
 function Landing({ onNav }) {
+  const buttons = [
+    { p: "learn",        icon: "📚", label: "Learn the Idioms", sub: "Flip through all 14, with audio",
+      gradient: "linear-gradient(135deg, #22C55E, #16A34A)", shadow: "var(--shadow-glow-leaf)" },
+    { p: "quiz-name",    icon: "🧠", label: "Take the Quiz",    sub: "3 rounds · race the clock",
+      gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)", shadow: "var(--shadow-glow-coral)" },
+    { p: "leaderboard",  icon: "🏆", label: "Wall of Fame",     sub: "See the top idiom masters",
+      gradient: "linear-gradient(135deg, #F59E0B, #D97706)", shadow: "var(--shadow-glow-sun)" },
+  ];
+
   return (
-    <div style={{ textAlign: "center", padding: "40px 20px" }}>
-      <div style={{ fontSize: 64, marginBottom: 8 }}>🎉</div>
-      <h1 style={{ fontSize: 32, fontWeight: 800, color: "#1E3A5F", margin: "0 0 8px 0" }}>
+    <main
+      className="az-fade-in"
+      style={{
+        textAlign: "center",
+        padding: "28px 20px 48px",
+        maxWidth: 520,
+        margin: "0 auto",
+      }}
+    >
+      <div
+        className="az-pop-in"
+        aria-hidden="true"
+        style={{
+          fontSize: 72, marginBottom: 4, display: "inline-block",
+          animation: "az-pop-in var(--dur-slow) var(--ease-spring) both, az-float 3.4s var(--ease-out) infinite 0.6s",
+        }}
+      >
+        🎉
+      </div>
+      <h1 style={{
+        fontFamily: "var(--font-display)",
+        fontSize: "clamp(28px, 7vw, 36px)",
+        fontWeight: 700,
+        color: "var(--color-ink)",
+        margin: "4px 0 10px",
+      }}>
         You Found the Secret!
       </h1>
-      <p style={{ color: "#5A6B7F", fontSize: 16, maxWidth: 400, margin: "0 auto 32px auto", lineHeight: 1.6 }}>
-        This t-shirt hides <strong>14 English idioms</strong> in one chaotic cartoon scene. 
-        Learn what they mean, hear how they sound, and test yourself!
+      <p style={{
+        color: "var(--color-muted)",
+        fontSize: 15,
+        maxWidth: 380,
+        margin: "0 auto 28px",
+        lineHeight: 1.55,
+      }}>
+        This t-shirt hides <strong style={{ color: "var(--color-ink)" }}>14 English idioms</strong> in
+        one chaotic cartoon scene. Learn what they mean, hear how they sound, and test yourself!
       </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 320, margin: "0 auto" }}>
-        <button onClick={() => onNav("learn")} style={{
-          background: "linear-gradient(135deg, #16A34A, #15803D)",
-          color: "#fff", border: "none", padding: "18px 32px", borderRadius: 16,
-          fontSize: 20, fontWeight: 700, cursor: "pointer",
-          boxShadow: "0 4px 14px rgba(22,163,74,0.3)",
-        }}>
-          📚 Learn the Idioms
-        </button>
-        <button onClick={() => onNav("quiz-name")} style={{
-          background: "linear-gradient(135deg, #DC2626, #B91C1C)",
-          color: "#fff", border: "none", padding: "18px 32px", borderRadius: 16,
-          fontSize: 20, fontWeight: 700, cursor: "pointer",
-          boxShadow: "0 4px 14px rgba(220,38,38,0.3)",
-        }}>
-          🧠 Take the Quiz
-        </button>
-        <button onClick={() => onNav("leaderboard")} style={{
-          background: "linear-gradient(135deg, #D97706, #B45309)",
-          color: "#fff", border: "none", padding: "18px 32px", borderRadius: 16,
-          fontSize: 20, fontWeight: 700, cursor: "pointer",
-          boxShadow: "0 4px 14px rgba(217,119,6,0.3)",
-        }}>
-          🏆 Leaderboard
-        </button>
+
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 14,
+        maxWidth: 340, margin: "0 auto",
+      }}>
+        {buttons.map(({ p, icon, label, sub, gradient, shadow }) => (
+          <button
+            key={p}
+            onClick={() => onNav(p)}
+            className="az-tap"
+            style={{
+              background: gradient,
+              color: "#fff",
+              border: "none",
+              padding: "16px 20px",
+              borderRadius: "var(--r-lg)",
+              cursor: "pointer",
+              boxShadow: shadow,
+              display: "flex", alignItems: "center", gap: 14,
+              textAlign: "left",
+              minHeight: 68,
+            }}
+          >
+            <span aria-hidden="true" style={{
+              fontSize: 32, width: 44, height: 44, flexShrink: 0,
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              background: "rgba(255,255,255,0.22)",
+              borderRadius: 14,
+            }}>{icon}</span>
+            <span style={{ flex: 1, lineHeight: 1.2 }}>
+              <span style={{
+                display: "block",
+                fontFamily: "var(--font-display)",
+                fontSize: 19, fontWeight: 700, letterSpacing: "0.2px",
+              }}>{label}</span>
+              <span style={{
+                display: "block",
+                fontSize: 12, fontWeight: 600,
+                opacity: 0.88, marginTop: 2,
+              }}>{sub}</span>
+            </span>
+            <span aria-hidden="true" style={{ fontSize: 22, opacity: 0.9 }}>›</span>
+          </button>
+        ))}
       </div>
-      <p style={{ color: "#9CA3AF", fontSize: 12, marginTop: 40 }}>
-        AZ English School • Świdnik
+
+      <p style={{
+        color: "var(--color-muted)",
+        fontSize: 12, marginTop: 40, fontWeight: 600,
+      }}>
+        AZ English School · Świdnik
       </p>
-    </div>
+    </main>
   );
 }
 
@@ -746,6 +865,15 @@ export default function App() {
   const [quizTime, setQuizTime] = useState(0);
   const [leaderboard, setLeaderboard] = useState([]);
   const [quizQuestions, setQuizQuestions] = useState({ r1: [], r2: [], r3: [] });
+  const [muted, setMuted] = useState(isMuted());
+
+  const toggleMute = useCallback(() => {
+    setMuted((m) => {
+      const next = !m;
+      setMutedGlobal(next);
+      return next;
+    });
+  }, []);
 
   // Load leaderboard
   useEffect(() => {
@@ -834,11 +962,10 @@ export default function App() {
 
   return (
     <div style={{
-      minHeight: "100vh",
-      background: "linear-gradient(180deg, #F8FAFC 0%, #EFF6FF 100%)",
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+      minHeight: "100dvh",
+      background: "linear-gradient(180deg, var(--color-cream) 0%, var(--color-paper) 60%, #EAF4FF 100%)",
     }}>
-      <Header page={page} onNav={handleNav} />
+      <Header page={page} onNav={handleNav} muted={muted} onToggleMute={toggleMute} />
 
       {page === "landing" && <Landing onNav={handleNav} />}
       {page === "learn" && <LearnMode onNav={handleNav} />}
