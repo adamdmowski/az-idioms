@@ -1,0 +1,114 @@
+{
+  "01_raining_cats_dogs": {
+    "idiom": "It's raining cats and dogs",
+    "file": "01_raining_cats_dogs.png",
+    "xPercent": 17.12,
+    "yPercent": 0.48,
+    "wPercent": 48.03,
+    "hPercent": 38.8
+  },
+  "02_when_pigs_fly": {
+    "idiom": "When pigs fly",
+    "file": "02_when_pigs_fly.png",
+    "xPercent": 20.92,
+    "yPercent": 25.06,
+    "wPercent": 45.65,
+    "hPercent": 23.13
+  },
+  "03_on_cloud_nine": {
+    "idiom": "On cloud nine",
+    "file": "03_on_cloud_nine.png",
+    "xPercent": 65.53,
+    "yPercent": 7.61,
+    "wPercent": 25.06,
+    "hPercent": 32.0
+  },
+  "04_hold_your_horses": {
+    "idiom": "Hold your horses",
+    "file": "04_hold_your_horses.png",
+    "xPercent": 3.8,
+    "yPercent": 46.27,
+    "wPercent": 32.33,
+    "hPercent": 23.13
+  },
+  "05_storm_teacup": {
+    "idiom": "A storm in a teacup",
+    "file": "05_storm_teacup.png",
+    "xPercent": 26.63,
+    "yPercent": 69.4,
+    "wPercent": 11.41,
+    "hPercent": 15.42
+  },
+  "06_cold_turkey": {
+    "idiom": "Cold turkey",
+    "file": "06_cold_turkey.png",
+    "xPercent": 13.31,
+    "yPercent": 69.4,
+    "wPercent": 15.22,
+    "hPercent": 23.13
+  },
+  "07_elephant_room": {
+    "idiom": "The elephant in the room",
+    "file": "07_elephant_room.png",
+    "xPercent": 34.24,
+    "yPercent": 34.7,
+    "wPercent": 32.33,
+    "hPercent": 32.77
+  },
+  "08_cool_cucumber": {
+    "idiom": "Cool as a cucumber",
+    "file": "08_cool_cucumber.png",
+    "xPercent": 57.06,
+    "yPercent": 48.19,
+    "wPercent": 7.61,
+    "hPercent": 21.2
+  },
+  "09_spill_beans": {
+    "idiom": "Spill the beans",
+    "file": "09_spill_beans.png",
+    "xPercent": 36.14,
+    "yPercent": 67.47,
+    "wPercent": 19.02,
+    "hPercent": 13.49
+  },
+  "10_cat_out_of_bag": {
+    "idiom": "Let the cat out of the bag",
+    "file": "10_cat_out_of_bag.png",
+    "xPercent": 55.16,
+    "yPercent": 69.4,
+    "wPercent": 11.41,
+    "hPercent": 13.49
+  },
+  "11_cat_got_tongue": {
+    "idiom": "Cat got your tongue?",
+    "file": "11_cat_got_tongue.png",
+    "xPercent": 60.87,
+    "yPercent": 69.4,
+    "wPercent": 20.92,
+    "hPercent": 25.06
+  },
+  "12_break_a_leg": {
+    "idiom": "Break a leg",
+    "file": "12_break_a_leg.png",
+    "xPercent": 81.79,
+    "yPercent": 34.7,
+    "wPercent": 17.12,
+    "hPercent": 30.84
+  },
+  "13_cold_feet": {
+    "idiom": "Cold feet",
+    "file": "13_cold_feet.png",
+    "xPercent": 67.19,
+    "yPercent": 44.24,
+    "wPercent": 15.17,
+    "hPercent": 22.84
+  },
+  "14_piece_of_cake": {
+    "idiom": "Piece of cake",
+    "file": "14_piece_of_cake.png",
+    "xPercent": 76.08,
+    "yPercent": 63.61,
+    "wPercent": 20.92,
+    "hPercent": 17.35
+  }
+}
