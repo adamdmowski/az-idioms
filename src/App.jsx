@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Catch from "./Catch";
 import Challenge from "./Challenge";
 import { supabase, supabaseConfigured } from "./supabase";
+import { playForIdiom, cancelAudio } from "./audio";
 
 const IDIOMS = [
   {
@@ -183,47 +184,9 @@ function shuffle(arr) {
   return a;
 }
 
-// Global mute state — read by speak() so any future sound (TTS, music, SFX) respects it.
-let _muted = false;
-try {
-  _muted = localStorage.getItem("az-idioms-muted") === "1";
-} catch (_) { /* ignore */ }
-
-function isMuted() { return _muted; }
-function setMutedGlobal(v) {
-  _muted = !!v;
-  try { localStorage.setItem("az-idioms-muted", _muted ? "1" : "0"); } catch (_) { /* ignore */ }
-  if (_muted && "speechSynthesis" in window) window.speechSynthesis.cancel();
-}
-
-// Warm up the voice list — some browsers populate it asynchronously.
-if (typeof window !== "undefined" && "speechSynthesis" in window) {
-  try { window.speechSynthesis.getVoices(); } catch (_) { /* ignore */ }
-}
-
-function pickEnGbVoice() {
-  if (!("speechSynthesis" in window)) return null;
-  const voices = window.speechSynthesis.getVoices();
-  if (!voices || voices.length === 0) return null;
-  return (
-    voices.find((v) => v.lang === "en-GB" && /female|kate|amelia|libby|sonia/i.test(v.name)) ||
-    voices.find((v) => v.lang === "en-GB") ||
-    voices.find((v) => v.lang && v.lang.startsWith("en-GB")) ||
-    null
-  );
-}
-
-function speak(text) {
-  if (_muted) return;
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.lang = "en-GB";
-  const v = pickEnGbVoice();
-  if (v) u.voice = v;
-  u.rate = 0.85;
-  u.pitch = 1;
-  window.speechSynthesis.speak(u);
+// Read the persisted mute state synchronously for the floating-button initial render.
+function readMuted() {
+  try { return localStorage.getItem("az-idioms-muted") === "1"; } catch (_) { return false; }
 }
 
 function formatTime(ms) {
@@ -548,7 +511,7 @@ function LearnMode({ onNav, initialId }) {
         </h2>
 
         <button
-          onClick={(e) => { e.stopPropagation(); speak(idiom.name); }}
+          onClick={(e) => { e.stopPropagation(); playForIdiom(idiom, "name"); }}
           style={{
             display: "block", margin: "8px auto 16px auto",
             background: "#1E3A5F", color: "#fff", border: "none",
@@ -580,7 +543,7 @@ function LearnMode({ onNav, initialId }) {
                 "{idiom.example}"
               </div>
               <button
-                onClick={(e) => { e.stopPropagation(); speak(idiom.example.replace(/"/g, "")); }}
+                onClick={(e) => { e.stopPropagation(); playForIdiom(idiom, "example"); }}
                 style={{
                   marginTop: 8, background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE",
                   padding: "4px 12px", borderRadius: 12, cursor: "pointer", fontSize: 12,
@@ -1015,7 +978,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   const handleClose = useCallback(() => {
     if (closing) return;
     setClosing(true);
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    cancelAudio();
     if (closeTimerRef.current != null) clearTimeout(closeTimerRef.current);
     closeTimerRef.current = setTimeout(() => {
       closeTimerRef.current = null;
@@ -1041,14 +1004,11 @@ function LearningWindow({ initialId, cutouts, onClose }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Autoplay: speak the idiom name on open and on every idiom change. Cleanup
-  // cancels any in-flight utterance so prev/next/swipe never queue or overlap.
+  // Autoplay: play the idiom name on open and on every idiom change. Cleanup
+  // cancels any in-flight playback so prev/next/swipe never queue or overlap.
   useEffect(() => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    speak(current.name);
-    return () => {
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    };
+    playForIdiom(current, "name");
+    return () => { cancelAudio(); };
   }, [current.id]);
 
   // Swipe handling (horizontal only; ignore vertical scroll gestures)
@@ -1202,7 +1162,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
 
           {/* Hear it */}
           <button
-            onClick={() => speak(current.name)}
+            onClick={() => playForIdiom(current, "name")}
             className="az-tap"
             aria-label={`Hear "${current.name}"`}
             style={{
@@ -1236,7 +1196,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
           <LearningSection title="Example" color="var(--color-leaf)">
             <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
             <button
-              onClick={() => speak(current.example)}
+              onClick={() => playForIdiom(current, "example")}
               aria-label="Hear the example"
               className="az-tap"
               style={{
@@ -1330,7 +1290,7 @@ export default function App() {
     if (typeof window === "undefined") return "landing";
     return window.location.pathname === "/catch" ? "catch" : "landing";
   });
-  const [muted, setMuted] = useState(isMuted());
+  const [muted, setMuted] = useState(readMuted);
   const [selectedIdiomId, setSelectedIdiomId] = useState(null);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
   const [cutouts, setCutouts] = useState([]);
@@ -1399,7 +1359,8 @@ export default function App() {
   const toggleMute = useCallback(() => {
     setMuted((m) => {
       const next = !m;
-      setMutedGlobal(next);
+      try { localStorage.setItem("az-idioms-muted", next ? "1" : "0"); } catch (_) { /* ignore */ }
+      if (next) cancelAudio();
       return next;
     });
   }, []);
@@ -1489,7 +1450,6 @@ export default function App() {
         <Challenge
           idioms={IDIOMS}
           cutouts={cutouts}
-          speak={speak}
           onBack={() => handleNav("landing")}
           onViewFame={() => handleNav("leaderboard")}
         />
@@ -1499,7 +1459,6 @@ export default function App() {
         <Catch
           cutouts={cutouts}
           idioms={IDIOMS}
-          speak={speak}
           onBack={() => handleNav("landing")}
           onViewFame={() => handleNav("leaderboard")}
         />

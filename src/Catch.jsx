@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
+import { playForIdiom, cancelAudio } from "./audio";
 
 const PLAYER_NAME_KEY = "azidioms_player_name";
 function loadPlayerName() {
@@ -465,7 +466,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
 }
 
 // ─── Main game component ────────────────
-export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
+export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
   const [phase, setPhase] = useState("start"); // 'start' | 'playing' | 'over'
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(1);
@@ -526,7 +527,7 @@ export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (flashClearTimerRef.current) { clearTimeout(flashClearTimerRef.current); flashClearTimerRef.current = null; }
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    cancelAudio();
     setFallers([]);
     setFlash(null);
     const final = scoreRef.current;
@@ -551,7 +552,7 @@ export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
     const idiom = shuffled[promptIdx];
     if (!idiom) return; // shuffled not yet primed
 
-    speak(idiom.name);
+    playForIdiom(idiom, "name");
 
     const distractors = shuffle(idioms.filter((x) => x.id !== idiom.id)).slice(0, N_CHARS - 1);
     const all = shuffle([idiom, ...distractors]);
@@ -570,7 +571,7 @@ export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
     tappedKeysRef.current = new Set();
     waveStartRef.current = performance.now();
     setFallers(wave);
-  }, [phase, promptIdx, shuffled, idioms, speak, finishGame]);
+  }, [phase, promptIdx, shuffled, idioms, finishGame]);
 
   // ── RAF loop: drive falling animation ───
   useEffect(() => {
@@ -747,7 +748,7 @@ export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
       if (flashClearTimerRef.current) clearTimeout(flashClearTimerRef.current);
       confettiTimersRef.current.forEach((t) => clearTimeout(t));
       confettiTimersRef.current.clear();
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      cancelAudio();
     };
   }, []);
 

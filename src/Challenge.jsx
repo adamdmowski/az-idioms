@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
+import { playForIdiom, cancelAudio } from "./audio";
 
 // ─── Constants ──────────────────────────
 const PROGRESS_KEY = "azidioms_challenge_progress";
@@ -340,7 +341,7 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick }) {
 }
 
 // ─── Level Play (handles all 3 question types) ──────────
-function LevelPlay({ level, questions, cutouts, speak, onComplete, onBackToLevels }) {
+function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [questionIdx, setQuestionIdx] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
@@ -373,7 +374,7 @@ function LevelPlay({ level, questions, cutouts, speak, onComplete, onBackToLevel
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    cancelAudio();
   }, []);
 
   const advanceQuestion = () => {
@@ -394,7 +395,7 @@ function LevelPlay({ level, questions, cutouts, speak, onComplete, onBackToLevel
       const firstTry = attempts === 0;
       if (firstTry) setCorrectCount((c) => c + 1);
       correctSound();
-      speak(question.idiom.name);
+      playForIdiom(question.idiom, "name");
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 800);
     } else {
@@ -416,7 +417,7 @@ function LevelPlay({ level, questions, cutouts, speak, onComplete, onBackToLevel
       const firstTry = attempts === 0;
       if (firstTry) setCorrectCount((c) => c + 1);
       correctSound();
-      speak(question.idiom.name);
+      playForIdiom(question.idiom, "name");
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 1000);
     } else {
@@ -994,7 +995,7 @@ function BossResults({ score, total, onBack, onViewFame }) {
 }
 
 // ─── Main Challenge component ──────────
-export default function Challenge({ idioms, cutouts, speak, onBack, onViewFame }) {
+export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
   const [phase, setPhase] = useState("select"); // 'select' | 'play' | 'results'
   const [currentLevel, setCurrentLevel] = useState(null);
   const [questions, setQuestions] = useState([]);
@@ -1019,7 +1020,7 @@ export default function Challenge({ idioms, cutouts, speak, onBack, onViewFame }
   }, [currentLevel]);
 
   const handleBackToLevels = useCallback(() => {
-    if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+    cancelAudio();
     setPhase("select");
   }, []);
 
@@ -1057,7 +1058,6 @@ export default function Challenge({ idioms, cutouts, speak, onBack, onViewFame }
         level={currentLevel}
         questions={questions}
         cutouts={cutouts}
-        speak={speak}
         onComplete={handleComplete}
         onBackToLevels={handleBackToLevels}
       />
