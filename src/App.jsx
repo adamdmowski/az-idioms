@@ -175,6 +175,88 @@ const IDIOMS = [
   },
 ];
 
+// Polish translations for the Learning Window. Keyed by 2-digit idiom id.
+const LITERAL_PL = {
+  "01": "Pada kotami i psami",
+  "02": "Kiedy świnie latają",
+  "03": "Na chmurze numer dziewięć",
+  "04": "Trzymaj swoje konie",
+  "05": "Burza w filiżance",
+  "06": "Zimny indyk",
+  "07": "Słoń w pokoju",
+  "08": "Chłodny jak ogórek",
+  "09": "Rozsypać fasolę",
+  "10": "Wypuścić kota z torby",
+  "11": "Kot zjadł ci język?",
+  "12": "Złam nogę",
+  "13": "Zimne stopy",
+  "14": "Kawałek ciasta",
+};
+const EQUIVALENT_PL = {
+  "01": "Leje jak z cebra",
+  "02": null,
+  "03": "Być w siódmym niebie",
+  "04": "Wstrzymaj konie!",
+  "05": "Burza w szklance wody",
+  "06": null,
+  "07": null,
+  "08": null,
+  "09": null,
+  "10": null,
+  "11": "Zapomniałeś języka w gębie?",
+  "12": "Połamania nóg!",
+  "13": null,
+  "14": "Bułka z masłem",
+};
+const MEANING_PL = {
+  "01": "Pada bardzo mocno.",
+  "02": "Coś, co nigdy się nie stanie.",
+  "03": "Być bardzo szczęśliwym.",
+  "04": "Poczekaj chwilę, nie spiesz się.",
+  "05": "Robienie wielkiego zamieszania o coś małego.",
+  "06": "Rzucić nawyk nagle i całkowicie.",
+  "07": "Duży, oczywisty problem, o którym nikt nie mówi.",
+  "08": "Bardzo spokojny i opanowany, nawet w trudnej sytuacji.",
+  "09": "Wygadać się, często przez przypadek.",
+  "10": "Zdradzić tajemnicę.",
+  "11": "Mówi się do kogoś, kto jest cicho i nie chce mówić.",
+  "12": "Powodzenia! — szczególnie przed występem.",
+  "13": "Nagle stchórzyć i zrezygnować z czegoś zaplanowanego.",
+  "14": "Coś bardzo łatwego do zrobienia.",
+};
+const EXAMPLE_PL = {
+  "01": "Weź parasol — pada jak z cebra!",
+  "02": "Będziesz codziennie sprzątać pokój? Jasne — jak świnie zaczną latać!",
+  "03": "Była w siódmym niebie, kiedy wygrała nagrodę.",
+  "04": "Wstrzymaj konie — pozwól mi najpierw skończyć!",
+  "05": "Kłócili się o miejsca, ale to była burza w szklance wody.",
+  "06": "Rzucił jedzenie słodyczy z dnia na dzień.",
+  "07": "Nikt nie mówił o zbitym oknie — to był słoń w pokoju.",
+  "08": "Podczas testu była spokojna jak ogórek.",
+  "09": "Nie wygadaj się o przyjęciu-niespodziance!",
+  "10": "Wygadał się o nowym szczeniaku.",
+  "11": "Dlaczego jesteś taki cichy? Kot zjadł ci język?",
+  "12": "Dziś twój wielki występ — połamania nóg!",
+  "13": "Stchórzył tuż przed swoim przemówieniem.",
+  "14": "To zadanie domowe to była bułka z masłem.",
+};
+const FUNFACT_PL = {
+  "01": "W XVII-wiecznej Anglii po burzach zwierzęta podobno spływały z dachów słomianych — stąd mogło powstać to wyrażenie!",
+  "02": "To wyrażenie ma ponad 400 lat! Pierwszy raz pojawiło się drukiem w 1616 roku.",
+  "03": "W buddyzmie jest dziewięć poziomów nieba — 'cloud nine' to ten najwyższy i najszczęśliwszy!",
+  "04": "Wyrażenie pochodzi z czasów, gdy konie były głównym środkiem transportu — 'wstrzymaj konie' dosłownie znaczyło 'zatrzymaj się'!",
+  "05": "Po polsku mówimy 'burza w szklance wody' — prawie to samo co po angielsku, tylko szklanka zamiast filiżanki!",
+  "06": "Wyrażenie pochodzi z XX-wiecznej Ameryki — objawy nagłego odstawienia nałogu powodowały gęsią skórkę, jak u indyka!",
+  "07": "Wyrażenie pojawiło się po raz pierwszy w 1814 roku w bajce rosyjskiego autora Iwana Kryłowa!",
+  "08": "Ogórki mogą być o 11°C chłodniejsze w środku niż temperatura powietrza — więc to wyrażenie jest naukowo prawdziwe!",
+  "09": "W starożytności głosowano za pomocą fasoli. Przewrócenie naczynia ujawniało wynik — stąd 'spill the beans'!",
+  "10": "W średniowieczu oszuści sprzedawali koty w workach zamiast prosiąt. Otwarcie worka ujawniało oszustwo!",
+  "11": "Według legendy starożytni Egipcjanie karani kłamców obcinaniem języka i karmieniem nim kotów!",
+  "12": "W teatrze mówienie 'powodzenia' uważa się za pecha — dlatego aktorzy życzą sobie 'złamania nogi'!",
+  "13": "Wyrażenie pochodzi z XIX wieku i wiąże się z dreszczami odczuwanymi przed stresującym wydarzeniem!",
+  "14": "Wyrażenie pojawiło się w latach 30. XX wieku — prawdopodobnie od łatwych konkursów jedzenia ciasta w wojsku!",
+};
+
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -963,6 +1045,14 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   const current = ordered[idx];
   const cutout = cutouts.find((c) => c.id === current.id);
 
+  // Polish translations — keyed by 2-digit idiom id
+  const plKey = String(current.id).padStart(2, "0");
+  const literalPL    = LITERAL_PL[plKey];
+  const equivalentPL = EQUIVALENT_PL[plKey];
+  const meaningPL    = MEANING_PL[plKey];
+  const examplePL    = EXAMPLE_PL[plKey];
+  const funFactPL    = FUNFACT_PL[plKey];
+
   const goNext = useCallback(() => setIdx((i) => (i + 1) % ordered.length), [ordered.length]);
   const goPrev = useCallback(() => setIdx((i) => (i - 1 + ordered.length) % ordered.length), [ordered.length]);
 
@@ -1107,35 +1197,59 @@ function LearningWindow({ initialId, cutouts, onClose }) {
 
         {/* Idiom-changing content has a key so the entrance animation re-runs */}
         <div key={current.id} style={{ animation: "az-fade-in 280ms var(--ease-out) both" }}>
-          <h2 style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "clamp(22px, 5.8vw, 28px)",
-            color: "var(--color-ink)",
-            margin: "4px 50px 2px 4px",
-            lineHeight: 1.15,
+          {/* Idiom name + small speaker icon */}
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            margin: "4px 52px 14px 4px",
           }}>
-            {current.name}
-          </h2>
-          <p style={{
-            color: "var(--color-muted)",
-            fontSize: 13,
-            margin: "0 4px 14px",
-            fontWeight: 600,
-          }}>
-            🇵🇱 {current.meaningPL}
-          </p>
+            <h2 style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "clamp(22px, 5.8vw, 28px)",
+              color: "var(--color-ink)",
+              margin: 0,
+              lineHeight: 1.15,
+              flex: 1,
+              minWidth: 0,
+            }}>
+              {current.name}
+            </h2>
+            <button
+              onClick={() => playForIdiom(current, "name")}
+              aria-label={`Hear "${current.name}"`}
+              className="az-tap"
+              style={{
+                flexShrink: 0,
+                width: 36,
+                height: 36,
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))",
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+                fontSize: 16,
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "var(--shadow-sm)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >🔊</button>
+          </div>
 
-          {/* Character cutout card */}
+          {/* Character image card with literal-PL caption overlay */}
           <div style={{
             background: "linear-gradient(135deg, var(--color-cream-deep), #FFE8B8)",
             borderRadius: 20,
             padding: 14,
+            paddingBottom: 0,
             marginBottom: 14,
             position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            minHeight: 180,
+            minHeight: 200,
             aspectRatio: "16 / 11",
             overflow: "hidden",
           }}>
@@ -1146,7 +1260,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
                 draggable={false}
                 style={{
                   maxWidth: "92%",
-                  maxHeight: "92%",
+                  maxHeight: "82%",
                   objectFit: "contain",
                   filter: "drop-shadow(0 8px 14px rgba(0,0,0,0.18))",
                   animation: "az-pop-in 420ms var(--ease-spring) both",
@@ -1158,125 +1272,101 @@ function LearningWindow({ initialId, cutouts, onClose }) {
               <span aria-hidden="true" style={{ fontSize: 64 }}>{current.emoji}</span>
             )}
 
+            {/* Literal Polish caption */}
+            {literalPL && (
+              <div style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                padding: "8px 14px",
+                background: "linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.78) 60%)",
+                color: "#FFF7E8",
+                textAlign: "center",
+                fontFamily: "var(--font-display)",
+                fontWeight: 600,
+                fontSize: 13.5,
+                letterSpacing: "0.2px",
+                pointerEvents: "none",
+              }}>
+                <span style={{ opacity: 0.7, fontSize: 11, marginRight: 6 }}>dosłownie:</span>
+                "{literalPL}"
+              </div>
+            )}
           </div>
 
-          {/* Hear it */}
-          <button
-            onClick={() => playForIdiom(current, "name")}
-            className="az-tap"
-            aria-label={`Hear "${current.name}"`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              background: "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))",
-              color: "#fff",
-              border: "none",
-              padding: "11px 20px",
-              borderRadius: "var(--r-pill)",
-              cursor: "pointer",
+          {/* Polish equivalent idiom — only when one exists */}
+          {equivalentPL && (
+            <div style={{
+              margin: "0 0 14px",
+              padding: "8px 14px",
+              background: "linear-gradient(135deg, #FEF3C7, #FDE68A)",
+              border: "1px solid #F59E0B",
+              borderRadius: 14,
               fontFamily: "var(--font-display)",
               fontWeight: 700,
-              fontSize: 15,
-              margin: "0 auto 16px",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
-            🔊 Hear it
-          </button>
-          <div style={{ textAlign: "center", marginTop: -8 }} />
-
-          {/* Sections */}
-          <LearningSection title="What it means" color="var(--color-grape)">
-            {current.meaning}
-          </LearningSection>
-          <LearningSection title="Why the picture?" color="var(--color-coral)">
-            {current.picture}
-          </LearningSection>
-          <LearningSection title="Example" color="var(--color-leaf)">
-            <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
-            <button
-              onClick={() => playForIdiom(current, "example")}
-              aria-label="Hear the example"
-              className="az-tap"
-              style={{
-                marginLeft: 8,
-                background: "transparent",
-                color: "var(--color-leaf)",
-                border: "1.5px solid currentColor",
-                borderRadius: 999,
-                padding: "1px 10px",
-                cursor: "pointer",
-                fontSize: 12,
-                fontWeight: 700,
-                verticalAlign: "middle",
-              }}
-            >🔊</button>
-          </LearningSection>
-          {current.funFact && (
-            <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
-              {current.funFact}
-            </LearningSection>
+              fontSize: 14.5,
+              color: "#7C2D12",
+              textAlign: "center",
+              boxShadow: "0 2px 6px rgba(245, 158, 11, 0.18)",
+            }}>
+              <span aria-hidden="true" style={{ marginRight: 6 }}>🇵🇱</span>
+              "{equivalentPL}"
+            </div>
           )}
 
-          {/* Prev / position / Next */}
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button
-              onClick={goPrev}
-              className="az-tap"
-              aria-label="Previous idiom"
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: "var(--r-md)",
-                border: "2px solid var(--color-line)",
-                background: "#fff",
-                color: "var(--color-ink)",
-                cursor: "pointer",
-                fontFamily: "var(--font-display)",
-                fontWeight: 700,
-                fontSize: 15,
-                minHeight: 48,
-              }}
-            >← Prev</button>
-            <span style={{
-              color: "var(--color-muted)",
-              fontSize: 12,
-              fontWeight: 700,
-              minWidth: 44,
-              textAlign: "center",
-            }}>
-              {idx + 1} / {ordered.length}
-            </span>
-            <button
-              onClick={goNext}
-              className="az-tap"
-              aria-label="Next idiom"
-              style={{
-                flex: 1,
-                padding: "12px",
-                borderRadius: "var(--r-md)",
-                border: "none",
-                background: "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))",
-                color: "#fff",
-                cursor: "pointer",
-                fontFamily: "var(--font-display)",
-                fontWeight: 700,
-                fontSize: 15,
-                minHeight: 48,
-              }}
-            >Next →</button>
-          </div>
+          {/* What it means */}
+          <LearningSection title="What it means" color="var(--color-grape)">
+            <div>{current.meaning}</div>
+            {meaningPL && (
+              <div style={{
+                marginTop: 6,
+                fontSize: 13,
+                color: "var(--color-muted)",
+                fontWeight: 600,
+              }}>{meaningPL}</div>
+            )}
+          </LearningSection>
 
-          <p style={{
-            color: "var(--color-muted)",
-            fontSize: 11,
-            textAlign: "center",
-            marginTop: 12,
-            fontWeight: 600,
-          }}>
-            Swipe ◂ ▸ or use arrow keys
-          </p>
+          {/* Example */}
+          <LearningSection title="Example" color="var(--color-leaf)">
+            <div>
+              <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
+              <button
+                onClick={() => playForIdiom(current, "example")}
+                aria-label="Hear the example"
+                className="az-tap"
+                style={{
+                  marginLeft: 8,
+                  background: "transparent",
+                  color: "var(--color-leaf)",
+                  border: "1.5px solid currentColor",
+                  borderRadius: 999,
+                  padding: "1px 10px",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: 700,
+                  verticalAlign: "middle",
+                }}
+              >🔊</button>
+            </div>
+            {examplePL && (
+              <div style={{
+                marginTop: 6,
+                fontSize: 13,
+                color: "var(--color-muted)",
+                fontStyle: "italic",
+                fontWeight: 600,
+              }}>"{examplePL}"</div>
+            )}
+          </LearningSection>
+
+          {/* Did you know? — Polish */}
+          {funFactPL && (
+            <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
+              {funFactPL}
+            </LearningSection>
+          )}
         </div>
       </div>
     </div>
