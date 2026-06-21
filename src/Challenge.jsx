@@ -349,12 +349,17 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | null
   const [typed, setTyped] = useState("");
   const [revealed, setRevealed] = useState(false);
+  // Replay loop — review missed questions before showing results
+  const [activeQuestions, setActiveQuestions] = useState(questions);
+  const [missedQuestions, setMissedQuestions] = useState([]);
+  const [inReplay, setInReplay] = useState(false);
+  const [showTransition, setShowTransition] = useState(false);
   const timerRef = useRef(null);
   const correctCountRef = useRef(0);
   const fillInputRef = useRef(null);
 
-  const question = questions[questionIdx];
-  const isLast = questionIdx + 1 >= questions.length;
+  const question = activeQuestions[questionIdx];
+  const isLast = questionIdx + 1 >= activeQuestions.length;
 
   useEffect(() => { correctCountRef.current = correctCount; }, [correctCount]);
 
@@ -380,7 +385,20 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const advanceQuestion = () => {
     if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
     if (isLast) {
-      onComplete(correctCountRef.current);
+      // End of the current question list. If we just finished the main run
+      // and any first-attempt-wrong questions exist, replay them for review.
+      if (!inReplay && missedQuestions.length > 0) {
+        setShowTransition(true);
+        timerRef.current = setTimeout(() => {
+          timerRef.current = null;
+          setShowTransition(false);
+          setInReplay(true);
+          setActiveQuestions(missedQuestions);
+          setQuestionIdx(0);
+        }, 1200);
+      } else {
+        onComplete(correctCountRef.current);
+      }
     } else {
       setQuestionIdx((i) => i + 1);
     }
@@ -393,12 +411,17 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     const isCorrect = idiom.id === question.idiom.id;
     if (isCorrect) {
       const firstTry = attempts === 0;
-      if (firstTry) setCorrectCount((c) => c + 1);
+      // Only the original (non-replay) run contributes to the score
+      if (firstTry && !inReplay) setCorrectCount((c) => c + 1);
       correctSound();
       playForIdiom(question.idiom, "name");
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 800);
     } else {
+      // On the FIRST wrong of the original run, queue this for replay review
+      if (attempts === 0 && !inReplay) {
+        setMissedQuestions((m) => [...m, question]);
+      }
       wrongSound();
       setFeedback("wrong");
       setAttempts((a) => a + 1);
@@ -415,12 +438,16 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     const isCorrect = answerMatches(typed, question.answer);
     if (isCorrect) {
       const firstTry = attempts === 0;
-      if (firstTry) setCorrectCount((c) => c + 1);
+      if (firstTry && !inReplay) setCorrectCount((c) => c + 1);
       correctSound();
       playForIdiom(question.idiom, "name");
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 1000);
     } else {
+      // On the FIRST wrong of the original run, queue this for replay review
+      if (attempts === 0 && !inReplay) {
+        setMissedQuestions((m) => [...m, question]);
+      }
       wrongSound();
       const newAttempts = attempts + 1;
       setAttempts(newAttempts);
@@ -445,6 +472,37 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   };
 
   if (!question) return null;
+
+  // ── Transition screen between main run and replay ──
+  if (showTransition) {
+    return (
+      <main className="az-fade-in" style={{
+        minHeight: "calc(100dvh - 70px)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px 20px",
+        textAlign: "center",
+      }}>
+        <div className="az-pop-in" aria-hidden="true" style={{ fontSize: 80, lineHeight: 1 }}>💪</div>
+        <h2 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "clamp(24px, 6.5vw, 32px)",
+          color: "var(--color-ink)",
+          margin: "10px 0 6px",
+        }}>Let's try those again!</h2>
+        <p style={{
+          color: "var(--color-muted)",
+          fontSize: 14,
+          fontWeight: 600,
+          margin: 0,
+        }}>
+          {missedQuestions.length} to review
+        </p>
+      </main>
+    );
+  }
 
   // ── Render ──
   const promptText =
@@ -484,6 +542,19 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
             WebkitTapHighlightColor: "transparent",
           }}
         >← Levels</button>
+        {inReplay && (
+          <span style={{
+            background: "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
+            color: "#fff",
+            padding: "4px 10px",
+            borderRadius: 999,
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 10.5,
+            letterSpacing: "0.5px",
+            textTransform: "uppercase",
+          }}>Review</span>
+        )}
         <span style={{
           flex: 1,
           fontSize: 12,
@@ -491,7 +562,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
           color: "var(--color-muted)",
           textAlign: "right",
         }}>
-          {questionIdx + 1} / {questions.length}
+          {questionIdx + 1} / {activeQuestions.length}
         </span>
       </div>
       <div style={{
@@ -503,7 +574,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       }}>
         <div style={{
           height: "100%",
-          width: `${((questionIdx) / questions.length) * 100}%`,
+          width: `${(questionIdx / activeQuestions.length) * 100}%`,
           background: levelByid(level)?.gradient || "var(--color-ink)",
           transition: "width 280ms var(--ease-out)",
         }} />
@@ -684,7 +755,9 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
 }
 
 // ─── Level Results (Easy/Medium/Hard) ──────────
-function LevelResults({ level, score, total, onContinue, onBack }) {
+const LEVEL_PASS_THRESHOLD = 5; // out of 7 — required to unlock the next level
+
+function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack }) {
   const stars =
     score === total ? "⭐⭐⭐" :
     score >= Math.ceil(total * 0.7) ? "⭐⭐" :
@@ -692,6 +765,87 @@ function LevelResults({ level, score, total, onContinue, onBack }) {
 
   const next = nextLevel(level);
   const nextDef = next ? levelByid(next) : null;
+  const levelDef = levelByid(level);
+
+  if (!passed) {
+    // Below threshold — encourage and offer a retry of the same level
+    return (
+      <main className="az-fade-in" style={{
+        padding: "60px 20px 40px",
+        maxWidth: 460,
+        margin: "0 auto",
+        textAlign: "center",
+      }}>
+        <div className="az-pop-in" aria-hidden="true" style={{ fontSize: 80, lineHeight: 1 }}>💪</div>
+        <h1 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "clamp(26px, 6.5vw, 32px)",
+          color: "var(--color-ink)",
+          margin: "8px 0 6px",
+        }}>Almost!</h1>
+        <p style={{
+          color: "var(--color-muted)",
+          fontSize: 14.5,
+          fontWeight: 600,
+          margin: "0 auto 16px",
+          maxWidth: 320,
+          lineHeight: 1.4,
+        }}>
+          Get {LEVEL_PASS_THRESHOLD} right to unlock the next level.
+        </p>
+
+        <div style={{
+          background: "#fff",
+          borderRadius: 22,
+          padding: 22,
+          marginBottom: 22,
+          boxShadow: "var(--shadow-md)",
+        }}>
+          <div style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 18,
+            fontWeight: 700,
+            color: "var(--color-ink)",
+          }}>
+            You got <span style={{ color: "var(--color-coral)" }}>{score}/{total}</span> right on the first try.
+          </div>
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
+          <button
+            onClick={onRetry}
+            className="az-tap"
+            style={{
+              background: levelDef?.gradient || "linear-gradient(135deg, #EF6F5C, #DC2626)",
+              color: "#fff",
+              border: "none",
+              padding: "16px 24px",
+              borderRadius: 18,
+              fontFamily: "var(--font-display)",
+              fontWeight: 700, fontSize: 17,
+              cursor: "pointer",
+              boxShadow: levelDef?.glow || "var(--shadow-glow-coral)",
+              minHeight: 56,
+            }}
+          >Try again →</button>
+          <button
+            onClick={onBack}
+            className="az-tap"
+            style={{
+              background: "#fff",
+              color: "var(--color-ink)",
+              border: "2px solid var(--color-line)",
+              padding: "14px",
+              borderRadius: 16,
+              fontFamily: "var(--font-display)",
+              fontWeight: 700, fontSize: 15,
+              cursor: "pointer",
+            }}
+          >← Back to levels</button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="az-fade-in" style={{
@@ -769,13 +923,15 @@ function LevelResults({ level, score, total, onContinue, onBack }) {
 }
 
 // ─── Boss Results (with post-to-Wall-of-Fame) ──────────
-function BossResults({ score, total, onBack, onViewFame }) {
+const BOSS_PASS_THRESHOLD = 7; // out of 10 — required to mark the Boss as completed
+
+function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
   // score is correctCount (0..10). Posted as score * 10 for a 0..100 scale.
   const points = score * 10;
   let title, emoji;
-  if (score === total)       { title = "Idiom Master!";    emoji = "👑"; }
-  else if (score >= 7)       { title = "Almost there!";    emoji = "🌟"; }
-  else                       { title = "Keep practising!"; emoji = "🌱"; }
+  if (score === total)       { title = "Idiom Master!"; emoji = "👑"; }
+  else if (passed)           { title = "Almost there!"; emoji = "🌟"; }
+  else                       { title = "Almost!";       emoji = "💪"; }
 
   const [name, setName] = useState(loadPlayerName);
   const [postState, setPostState] = useState("idle"); // 'idle'|'posting'|'posted'|'error'
@@ -827,6 +983,19 @@ function BossResults({ score, total, onBack, onViewFame }) {
         color: "var(--color-ink)",
         margin: "6px 0 0",
       }}>{title}</h1>
+
+      {!passed && (
+        <p style={{
+          color: "var(--color-muted)",
+          fontSize: 14.5,
+          fontWeight: 600,
+          margin: "10px auto 0",
+          maxWidth: 320,
+          lineHeight: 1.4,
+        }}>
+          Get {BOSS_PASS_THRESHOLD} right to master the Challenge.
+        </p>
+      )}
 
       <div style={{
         background: "#fff",
@@ -974,22 +1143,43 @@ function BossResults({ score, total, onBack, onViewFame }) {
         </div>
       )}
 
-      <button
-        onClick={onBack}
-        className="az-tap"
-        style={{
-          width: "100%",
-          maxWidth: 320,
-          background: "#fff",
-          color: "var(--color-ink)",
-          border: "2px solid var(--color-line)",
-          padding: "14px",
-          borderRadius: 16,
-          fontFamily: "var(--font-display)",
-          fontWeight: 700, fontSize: 15,
-          cursor: "pointer",
-        }}
-      >← Back to levels</button>
+      <div style={{
+        display: "flex", flexDirection: "column", gap: 12,
+        width: "100%", maxWidth: 320, margin: "0 auto",
+      }}>
+        {!passed && (
+          <button
+            onClick={onRetry}
+            className="az-tap"
+            style={{
+              background: "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
+              color: "#fff",
+              border: "none",
+              padding: "16px 24px",
+              borderRadius: 18,
+              fontFamily: "var(--font-display)",
+              fontWeight: 700, fontSize: 17,
+              cursor: "pointer",
+              boxShadow: "var(--shadow-glow-sun)",
+              minHeight: 56,
+            }}
+          >Try again →</button>
+        )}
+        <button
+          onClick={onBack}
+          className="az-tap"
+          style={{
+            background: "#fff",
+            color: "var(--color-ink)",
+            border: "2px solid var(--color-line)",
+            padding: "14px",
+            borderRadius: 16,
+            fontFamily: "var(--font-display)",
+            fontWeight: 700, fontSize: 15,
+            cursor: "pointer",
+          }}
+        >← Back to levels</button>
+      </div>
     </main>
   );
 }
@@ -1011,11 +1201,16 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
 
   const handleComplete = useCallback((score) => {
     setLastScore(score);
-    setProgress((prev) => {
-      const next = { ...prev, [currentLevel]: true };
-      saveProgress(next);
-      return next;
-    });
+    // Only mark this level completed (and unlock the next) when the kid hit
+    // the pass threshold. Boss needs 7/10; the other levels need 5/7.
+    const threshold = currentLevel === "boss" ? BOSS_PASS_THRESHOLD : LEVEL_PASS_THRESHOLD;
+    if (score >= threshold) {
+      setProgress((prev) => {
+        const next = { ...prev, [currentLevel]: true };
+        saveProgress(next);
+        return next;
+      });
+    }
     setPhase("results");
   }, [currentLevel]);
 
@@ -1032,6 +1227,10 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
       handleBackToLevels();
     }
   }, [currentLevel, startLevel, handleBackToLevels]);
+
+  const handleRetry = useCallback(() => {
+    if (currentLevel) startLevel(currentLevel);
+  }, [currentLevel, startLevel]);
 
   const handleResetProgress = useCallback(() => {
     if (typeof window !== "undefined" && window.confirm(
@@ -1065,11 +1264,16 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
   }
 
   // phase === "results"
+  const passThreshold = currentLevel === "boss" ? BOSS_PASS_THRESHOLD : LEVEL_PASS_THRESHOLD;
+  const passed = lastScore >= passThreshold;
+
   if (currentLevel === "boss") {
     return (
       <BossResults
         score={lastScore}
         total={10}
+        passed={passed}
+        onRetry={handleRetry}
         onBack={handleBackToLevels}
         onViewFame={onViewFame}
       />
@@ -1080,7 +1284,9 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
       level={currentLevel}
       score={lastScore}
       total={7}
+      passed={passed}
       onContinue={handleContinue}
+      onRetry={handleRetry}
       onBack={handleBackToLevels}
     />
   );
