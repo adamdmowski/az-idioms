@@ -1007,9 +1007,13 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   const startIdx = Math.max(0, ordered.findIndex((it) => it.id === initialId));
   const [idx, setIdx] = useState(startIdx);
   const [closing, setClosing] = useState(false);
-  // Meaning starts hidden — kid recalls the idiom from the name + picture
-  // before tapping to reveal. Resets when the idiom changes (swipe/arrow).
+  // Each section below the picture starts hidden — the kid recalls / guesses
+  // from the name + picture before tapping to reveal. All four reset when
+  // the idiom changes (swipe/arrow).
   const [meaningRevealed, setMeaningRevealed] = useState(false);
+  const [exampleRevealed, setExampleRevealed] = useState(false);
+  const [equivalentRevealed, setEquivalentRevealed] = useState(false);
+  const [funFactRevealed, setFunFactRevealed] = useState(false);
 
   const current = ordered[idx];
   const cutout = cutouts.find((c) => c.id === current.id);
@@ -1070,6 +1074,9 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   // new idiom starts with the recall-then-reveal interaction.
   useEffect(() => {
     setMeaningRevealed(false);
+    setExampleRevealed(false);
+    setEquivalentRevealed(false);
+    setFunFactRevealed(false);
     const t = setTimeout(() => { playForIdiom(current, "name"); }, 100);
     return () => {
       clearTimeout(t);
@@ -1307,41 +1314,67 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             )}
           </LearningSection>
 
-          {/* Example */}
+          {/* Example — tap to reveal */}
           <LearningSection title="Example" color="var(--color-leaf)">
-            <div>
-              <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
+            {!exampleRevealed ? (
               <button
-                onClick={() => playForIdiom(current, "example")}
-                aria-label="Hear the example"
+                onClick={() => setExampleRevealed(true)}
+                aria-label="See the example"
+                aria-expanded="false"
                 className="az-tap"
                 style={{
-                  marginLeft: 8,
-                  background: "transparent",
-                  color: "var(--color-leaf)",
-                  border: "1.5px solid currentColor",
-                  borderRadius: 999,
-                  padding: "1px 10px",
-                  cursor: "pointer",
-                  fontSize: 12,
+                  display: "block",
+                  width: "100%",
+                  background: "linear-gradient(135deg, rgba(22, 163, 74, 0.20), rgba(22, 163, 74, 0.08))",
+                  border: "2px dashed rgba(22, 163, 74, 0.55)",
+                  borderRadius: "var(--r-md)",
+                  padding: "16px 14px",
+                  color: "var(--color-text)",
+                  fontFamily: "var(--font-display)",
                   fontWeight: 700,
-                  verticalAlign: "middle",
+                  fontSize: 17,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
                 }}
-              >🔊</button>
-            </div>
-            {examplePL && (
-              <div style={{
-                marginTop: 6,
-                fontSize: 13,
-                color: "var(--color-muted)",
-                fontStyle: "italic",
-                fontWeight: 600,
-              }}>"{examplePL}"</div>
+              >💬 See an example</button>
+            ) : (
+              <div style={{ animation: "az-fade-in 320ms var(--ease-out) both" }}>
+                <div>
+                  <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
+                  <button
+                    onClick={() => playForIdiom(current, "example")}
+                    aria-label="Hear the example"
+                    className="az-tap"
+                    style={{
+                      marginLeft: 8,
+                      background: "transparent",
+                      color: "var(--color-leaf)",
+                      border: "1.5px solid currentColor",
+                      borderRadius: 999,
+                      padding: "1px 10px",
+                      cursor: "pointer",
+                      fontSize: 12,
+                      fontWeight: 700,
+                      verticalAlign: "middle",
+                    }}
+                  >🔊</button>
+                </div>
+                {examplePL && (
+                  <div style={{
+                    marginTop: 6,
+                    fontSize: 13,
+                    color: "var(--color-muted)",
+                    fontStyle: "italic",
+                    fontWeight: 600,
+                  }}>"{examplePL}"</div>
+                )}
+              </div>
             )}
           </LearningSection>
 
           {/* Polish equivalent idiom — only when one exists. The label is
-              a small Polish flag SVG instead of text. */}
+              a small Polish flag SVG instead of text. Tap to reveal. */}
           {equivalentPL && (
             <LearningSection
               title={
@@ -1369,21 +1402,76 @@ function LearningWindow({ initialId, cutouts, onClose }) {
               }
               color="var(--color-sun)"
             >
-              <span style={{ fontStyle: "italic" }}>"{equivalentPL}"</span>
+              {!equivalentRevealed ? (
+                <button
+                  onClick={() => setEquivalentRevealed(true)}
+                  aria-label="Reveal Polish equivalent"
+                  aria-expanded="false"
+                  className="az-tap"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 4,
+                    width: "100%",
+                    background: "linear-gradient(135deg, rgba(245, 158, 11, 0.20), rgba(245, 158, 11, 0.08))",
+                    border: "2px dashed rgba(245, 158, 11, 0.55)",
+                    borderRadius: "var(--r-md)",
+                    padding: "14px 14px",
+                    color: "var(--color-text)",
+                    fontFamily: "var(--font-display)",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >
+                  <span aria-hidden="true" style={{ fontSize: 26, lineHeight: 1 }}>🇵🇱</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--color-muted)" }}>Tap to reveal</span>
+                </button>
+              ) : (
+                <div style={{ animation: "az-fade-in 320ms var(--ease-out) both" }}>
+                  <span style={{ fontStyle: "italic" }}>"{equivalentPL}"</span>
+                </div>
+              )}
             </LearningSection>
           )}
 
-          {/* Did you know? — English with Polish translation underneath */}
+          {/* Did you know? — tap to reveal */}
           {(current.funFact || funFactPL) && (
             <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
-              {current.funFact && <div>{current.funFact}</div>}
-              {funFactPL && (
-                <div style={{
-                  marginTop: current.funFact ? 6 : 0,
-                  fontSize: 13,
-                  color: "var(--color-muted)",
-                  fontWeight: 600,
-                }}>{funFactPL}</div>
+              {!funFactRevealed ? (
+                <button
+                  onClick={() => setFunFactRevealed(true)}
+                  aria-label="Reveal fun fact"
+                  aria-expanded="false"
+                  className="az-tap"
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    background: "linear-gradient(135deg, rgba(217, 119, 6, 0.22), rgba(217, 119, 6, 0.08))",
+                    border: "2px dashed rgba(217, 119, 6, 0.55)",
+                    borderRadius: "var(--r-md)",
+                    padding: "16px 14px",
+                    color: "var(--color-text)",
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: 17,
+                    textAlign: "center",
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >💡 Fun fact!</button>
+              ) : (
+                <div style={{ animation: "az-fade-in 320ms var(--ease-out) both" }}>
+                  {current.funFact && <div>{current.funFact}</div>}
+                  {funFactPL && (
+                    <div style={{
+                      marginTop: current.funFact ? 6 : 0,
+                      fontSize: 13,
+                      color: "var(--color-muted)",
+                      fontWeight: 600,
+                    }}>{funFactPL}</div>
+                  )}
+                </div>
               )}
             </LearningSection>
           )}
