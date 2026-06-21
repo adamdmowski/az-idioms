@@ -1507,9 +1507,6 @@ export default function App() {
     const musicOff = musicOffRef.current;
     const page = pageRef.current;
     const learningOpen = learningOpenRef.current;
-    console.log(
-      `Music: applyMusicState muted=${muted} musicOff=${musicOff} page=${page} learningOpen=${learningOpen} hasAudio=${!!audio}`
-    );
     if (!audio) return;
     // Main mute and the dedicated music toggle both pause; music toggle is
     // independent of TTS/beeps. Page must also be the landing page.
@@ -1546,17 +1543,15 @@ export default function App() {
     };
 
     // Optimistic attempt — desktop browsers usually allow it; mobile usually won't.
-    console.log("Music: autoplay attempt");
     ensureAudio();
     const initialAudio = musicRef.current;
     if (initialAudio) {
       const p = initialAudio.play();
       if (p && typeof p.then === "function") {
         p.then(() => {
-          console.log("Music: autoplay succeeded");
           applyMusicState();
         }).catch(() => {
-          console.log("Music: autoplay blocked, waiting for user gesture");
+          /* autoplay blocked — fallback listener will start music on first gesture */
         });
       }
     }
@@ -1566,16 +1561,12 @@ export default function App() {
     // play() to be a direct child of the gesture call stack). Then schedule
     // applyMusicState() shortly after to apply mute/page/modal volume rules.
     const handler = () => {
-      console.log("Music: fallback listener fired");
       ensureAudio();
       const audio = musicRef.current;
       if (audio) {
         // Synchronous play() inside the gesture — this is the key bit.
         const p = audio.play();
-        if (p && typeof p.then === "function") {
-          p.then(() => console.log("Music: gesture play succeeded"))
-           .catch((err) => console.log("Music: gesture play rejected", err && err.message));
-        }
+        if (p && typeof p.catch === "function") p.catch(() => {});
       }
       // Adjust volume / mute / page state on the next tick so any pause-or-fade
       // happens AFTER the audio element has been activated by the gesture.
