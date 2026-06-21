@@ -252,7 +252,7 @@ function LevelSelect({ progress, onPickLevel, onResetProgress }) {
       <h1 style={{
         fontFamily: "var(--font-display)",
         fontSize: "clamp(30px, 8vw, 42px)",
-        color: "var(--color-ink)",
+        color: "var(--color-text)",
         margin: "0 0 6px",
       }}>🏆 Challenge</h1>
       <p style={{
@@ -274,7 +274,7 @@ function LevelSelect({ progress, onPickLevel, onResetProgress }) {
               className={unlocked ? "az-tap" : ""}
               aria-label={`${level.name}${!unlocked ? " (locked)" : done ? " (completed)" : ""}`}
               style={{
-                background: unlocked ? level.gradient : "#E5E7EB",
+                background: unlocked ? level.gradient : "var(--color-card-soft)",
                 color: unlocked ? "#fff" : "#9CA3AF",
                 border: "none",
                 padding: "14px 16px",
@@ -350,7 +350,7 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, sho
         const cutout = cutouts.find((c) => c.id === idiom.id);
         const isPicked = pickedId === idiom.id;
         let border = "2px solid var(--color-line)";
-        let bg = "linear-gradient(135deg, var(--color-cream-deep), #FFE8B8)";
+        let bg = "linear-gradient(135deg, var(--color-card), var(--color-card-soft))";
         let extraClass = "";
         if (isPicked && feedback === "correct") {
           border = "3px solid #16A34A";
@@ -419,7 +419,7 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, sho
                 fontFamily: "var(--font-display)",
                 fontSize: 11.5,
                 fontWeight: 700,
-                color: "var(--color-ink)",
+                color: "var(--color-text)",
                 lineHeight: 1.15,
                 textAlign: "center",
                 width: "100%",
@@ -651,7 +651,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
         <h2 style={{
           fontFamily: "var(--font-display)",
           fontSize: "clamp(24px, 6.5vw, 32px)",
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
           margin: "10px 0 6px",
         }}>Let's try those again!</h2>
         <p style={{
@@ -690,15 +690,17 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
           className="az-tap"
           aria-label="Back to levels"
           style={{
-            background: "rgba(255, 255, 255, 0.85)",
-            border: "1px solid var(--color-line)",
-            color: "var(--color-ink)",
+            background: "rgba(255, 255, 255, 0.10)",
+            border: "1px solid rgba(255, 255, 255, 0.18)",
+            color: "#fff",
             padding: "6px 12px",
             borderRadius: 999,
             fontFamily: "var(--font-display)",
             fontWeight: 700,
             fontSize: 12,
             cursor: "pointer",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
             WebkitTapHighlightColor: "transparent",
           }}
         >← Levels</button>
@@ -727,7 +729,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       </div>
       <div style={{
         height: 6,
-        background: "#E5E7EB",
+        background: "var(--color-card-soft)",
         borderRadius: 3,
         overflow: "hidden",
         marginBottom: 22,
@@ -769,7 +771,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
               <h2 style={{
                 fontFamily: "var(--font-display)",
                 fontSize: "clamp(20px, 5.5vw, 26px)",
-                color: "var(--color-ink)",
+                color: "var(--color-text)",
                 textAlign: "center",
                 margin: 0,
                 lineHeight: 1.25,
@@ -860,7 +862,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
             <p style={{
               fontFamily: "var(--font-display)",
               fontSize: "clamp(17px, 4.6vw, 22px)",
-              color: "var(--color-ink)",
+              color: "var(--color-text)",
               textAlign: "center",
               fontWeight: 600,
               fontStyle: "italic",
@@ -907,7 +909,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                           fontSize: "clamp(18px, 5.5vw, 24px)",
                           fontFamily: "var(--font-display)",
                           fontWeight: 700,
-                          color: "var(--color-ink)",
+                          color: "var(--color-text)",
                         }}>{ch}</span>
                       );
                     }
@@ -921,7 +923,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                         justifyContent: "center",
                         width: "clamp(24px, 7vw, 30px)",
                         height: "clamp(32px, 9vw, 40px)",
-                        borderBottom: "3px solid var(--color-ink)",
+                        borderBottom: "3px solid var(--color-text)",
                         fontFamily: "var(--font-display)",
                         fontSize: "clamp(18px, 5.5vw, 24px)",
                         fontWeight: 700,
@@ -944,34 +946,34 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
             }}>
               <svg width="120" height="150" viewBox="0 0 120 150" aria-hidden="true">
                 {/* Gallows (always shown) */}
-                <line x1="8" y1="146" x2="92" y2="146" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round"/>
-                <line x1="22" y1="146" x2="22" y2="8" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round"/>
-                <line x1="22" y1="8" x2="78" y2="8" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round"/>
-                <line x1="78" y1="8" x2="78" y2="24" stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                <line x1="8" y1="146" x2="92" y2="146" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="22" y1="146" x2="22" y2="8" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="22" y1="8" x2="78" y2="8" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="78" y1="8" x2="78" y2="24" stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
                 {/* Body parts */}
                 {wrongCount >= 1 && (
                   <circle key="head" className="hangman-part" cx="78" cy="35" r="10"
-                          stroke="var(--color-ink)" strokeWidth="2.5" fill="none"/>
+                          stroke="var(--color-text)" strokeWidth="2.5" fill="none"/>
                 )}
                 {wrongCount >= 2 && (
                   <line key="body" className="hangman-part" x1="78" y1="45" x2="78" y2="88"
-                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
                 )}
                 {wrongCount >= 3 && (
                   <line key="larm" className="hangman-part" x1="78" y1="58" x2="62" y2="74"
-                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
                 )}
                 {wrongCount >= 4 && (
                   <line key="rarm" className="hangman-part" x1="78" y1="58" x2="94" y2="74"
-                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
                 )}
                 {wrongCount >= 5 && (
                   <line key="lleg" className="hangman-part" x1="78" y1="88" x2="62" y2="114"
-                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
                 )}
                 {wrongCount >= 6 && (
                   <line key="rleg" className="hangman-part" x1="78" y1="88" x2="94" y2="114"
-                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
                 )}
               </svg>
             </div>
@@ -1101,7 +1103,7 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
         <h1 style={{
           fontFamily: "var(--font-display)",
           fontSize: "clamp(26px, 6.5vw, 32px)",
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
           margin: "8px 0 6px",
         }}>Almost!</h1>
         <p style={{
@@ -1116,7 +1118,7 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
         </p>
 
         <div style={{
-          background: "#fff",
+          background: "var(--color-card)",
           borderRadius: 22,
           padding: 22,
           marginBottom: 22,
@@ -1126,7 +1128,7 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
             fontFamily: "var(--font-display)",
             fontSize: 18,
             fontWeight: 700,
-            color: "var(--color-ink)",
+            color: "var(--color-text)",
           }}>
             You got <span style={{ color: "var(--color-coral)" }}>{score}/{total}</span> right on the first try.
           </div>
@@ -1155,8 +1157,8 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
             onClick={onBack}
             className="az-tap"
             style={{
-              background: "#fff",
-              color: "var(--color-ink)",
+              background: "var(--color-card)",
+              color: "var(--color-text)",
               border: "2px solid var(--color-line)",
               padding: "14px",
               borderRadius: 16,
@@ -1183,12 +1185,12 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
       <h1 style={{
         fontFamily: "var(--font-display)",
         fontSize: "clamp(26px, 6.5vw, 32px)",
-        color: "var(--color-ink)",
+        color: "var(--color-text)",
         margin: "8px 0 6px",
       }}>Level complete!</h1>
 
       <div style={{
-        background: "#fff",
+        background: "var(--color-card)",
         borderRadius: 22,
         padding: 22,
         marginTop: 16,
@@ -1201,7 +1203,7 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
           fontFamily: "var(--font-display)",
           fontSize: 18,
           fontWeight: 700,
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
         }}>
           You got <span style={{ color: "var(--color-leaf)" }}>{score}/{total}</span> right on the first try!
         </div>
@@ -1232,8 +1234,8 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
           onClick={onBack}
           className="az-tap"
           style={{
-            background: "#fff",
-            color: "var(--color-ink)",
+            background: "var(--color-card)",
+            color: "var(--color-text)",
             border: "2px solid var(--color-line)",
             padding: "14px",
             borderRadius: 16,
@@ -1292,7 +1294,7 @@ function PostScoreCard({ score, onViewFame }) {
       width: "100%",
       maxWidth: 380,
       margin: "0 auto 18px",
-      background: "#fff",
+      background: "var(--color-card)",
       borderRadius: 18,
       padding: "16px 16px 18px",
       boxShadow: "var(--shadow-sm)",
@@ -1332,7 +1334,8 @@ function PostScoreCard({ score, onViewFame }) {
               outline: "none",
               boxSizing: "border-box",
               marginBottom: 10,
-              background: postState === "posting" ? "#F3F4F6" : "#fff",
+              background: postState === "posting" ? "var(--color-card-soft)" : "var(--color-card)",
+              color: "var(--color-text)",
             }}
             onFocus={(e) => { e.target.style.borderColor = "var(--color-sun)"; }}
             onBlur={(e) => { e.target.style.borderColor = "var(--color-line)"; }}
@@ -1345,7 +1348,7 @@ function PostScoreCard({ score, onViewFame }) {
               width: "100%",
               background: canPost
                 ? "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))"
-                : "#E5E7EB",
+                : "var(--color-card-soft)",
               color: canPost ? "#fff" : "#9CA3AF",
               border: "none",
               padding: "13px",
@@ -1388,7 +1391,7 @@ function PostScoreCard({ score, onViewFame }) {
               style={{
                 width: "100%",
                 background: "transparent",
-                color: "var(--color-ink)",
+                color: "var(--color-text)",
                 border: "2px solid var(--color-line)",
                 padding: "11px",
                 borderRadius: 12,
@@ -1428,7 +1431,7 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
       <h1 style={{
         fontFamily: "var(--font-display)",
         fontSize: "clamp(28px, 7vw, 38px)",
-        color: "var(--color-ink)",
+        color: "var(--color-text)",
         margin: "6px 0 0",
       }}>{title}</h1>
 
@@ -1446,7 +1449,7 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
       )}
 
       <div style={{
-        background: "#fff",
+        background: "var(--color-card)",
         borderRadius: 22,
         padding: 22,
         marginTop: 18,
@@ -1463,7 +1466,7 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
         <div style={{
           fontFamily: "var(--font-display)",
           fontSize: 52, fontWeight: 700,
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
           lineHeight: 1,
           marginTop: 4,
         }}>{score}<span style={{ fontSize: 30, color: "var(--color-muted)" }}> / {total}</span></div>
@@ -1504,8 +1507,8 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
           onClick={onBack}
           className="az-tap"
           style={{
-            background: "#fff",
-            color: "var(--color-ink)",
+            background: "var(--color-card)",
+            color: "var(--color-text)",
             border: "2px solid var(--color-line)",
             padding: "14px",
             borderRadius: 16,

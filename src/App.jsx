@@ -594,14 +594,14 @@ function LearnMode({ onNav, initialId }) {
           </p>
         ) : (
           <div>
-            <div style={{ background: "#fff", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
                 Meaning
               </div>
               <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A2E" }}>{idiom.meaning}</div>
               <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>🇵🇱 {idiom.meaningPL}</div>
             </div>
-            <div style={{ background: "#fff", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
                 Example
               </div>
@@ -618,13 +618,13 @@ function LearnMode({ onNav, initialId }) {
                 🔊 Listen to example
               </button>
             </div>
-            <div style={{ background: "#fff", borderRadius: 12, padding: 16, marginBottom: 12 }}>
+            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
                 In the picture
               </div>
               <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{idiom.scene}</div>
             </div>
-            <div style={{ background: "#fff", borderRadius: 12, padding: 16 }}>
+            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#D97706", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
                 Did you know?
               </div>
@@ -731,7 +731,7 @@ function WallOfFame({ onNav }) {
         <h1 style={{
           fontFamily: "var(--font-display)",
           fontSize: "clamp(26px, 7vw, 36px)",
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
           margin: 0,
           letterSpacing: "0.3px",
         }}>🏆 Wall of Fame</h1>
@@ -743,9 +743,9 @@ function WallOfFame({ onNav }) {
           style={{
             width: 40, height: 40,
             borderRadius: 14,
-            background: "#fff",
+            background: "var(--color-card)",
             border: "1px solid var(--color-line)",
-            color: "var(--color-ink)",
+            color: "var(--color-text)",
             fontSize: 20,
             cursor: status === "loading" ? "default" : "pointer",
             display: "inline-flex", alignItems: "center", justifyContent: "center",
@@ -759,7 +759,7 @@ function WallOfFame({ onNav }) {
         display: "flex",
         gap: 8,
         marginBottom: 18,
-        background: "#fff",
+        background: "var(--color-card)",
         padding: 5,
         borderRadius: 14,
         border: "1px solid var(--color-line)",
@@ -781,7 +781,7 @@ function WallOfFame({ onNav }) {
                 background: isActive
                   ? "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))"
                   : "transparent",
-                color: isActive ? "#fff" : "var(--color-ink)",
+                color: isActive ? "#fff" : "var(--color-text)",
                 border: "none",
                 padding: "10px 8px",
                 borderRadius: 10,
@@ -916,7 +916,7 @@ function WallOfFame({ onNav }) {
           {/* List for #4 onward */}
           {scores.length > 3 && (
             <div style={{
-              background: "#fff",
+              background: "var(--color-card)",
               borderRadius: 18,
               overflow: "hidden",
               boxShadow: "var(--shadow-sm)",
@@ -931,8 +931,8 @@ function WallOfFame({ onNav }) {
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "11px 14px",
-                      background: striped ? "#FBF7EE" : "#fff",
-                      borderTop: i > 0 ? "1px solid #F3F4F6" : "none",
+                      background: striped ? "var(--color-card-soft)" : "var(--color-card)",
+                      borderTop: i > 0 ? "1px solid var(--color-line)" : "none",
                     }}
                   >
                     <span style={{
@@ -945,7 +945,7 @@ function WallOfFame({ onNav }) {
                       <div style={{
                         fontFamily: "var(--font-display)",
                         fontSize: 15, fontWeight: 700,
-                        color: "var(--color-ink)",
+                        color: "var(--color-text)",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
@@ -957,7 +957,7 @@ function WallOfFame({ onNav }) {
                     <div style={{
                       fontFamily: "var(--font-display)",
                       fontSize: 18, fontWeight: 800,
-                      color: "var(--color-ink)",
+                      color: "var(--color-text)",
                     }}>{entry.score}</div>
                   </div>
                 );
@@ -996,7 +996,7 @@ function WallOfFame({ onNav }) {
 function LearningSection({ title, color, children }) {
   return (
     <div style={{
-      background: "#fff",
+      background: "var(--color-card)",
       borderRadius: "var(--r-md)",
       padding: "12px 14px",
       marginBottom: 10,
@@ -1166,9 +1166,9 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             width: 42,
             height: 42,
             borderRadius: 14,
-            background: "#fff",
+            background: "var(--color-card)",
             border: "1px solid var(--color-line)",
-            color: "var(--color-ink)",
+            color: "var(--color-text)",
             fontSize: 24,
             fontWeight: 800,
             cursor: "pointer",
@@ -1192,7 +1192,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             <h2 style={{
               fontFamily: "var(--font-display)",
               fontSize: "clamp(22px, 5.8vw, 28px)",
-              color: "var(--color-ink)",
+              color: "var(--color-text)",
               margin: 0,
               lineHeight: 1.15,
               flex: 1,
@@ -1239,7 +1239,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
 
           {/* Character image card */}
           <div style={{
-            background: "linear-gradient(135deg, var(--color-cream-deep), #FFE8B8)",
+            background: "linear-gradient(135deg, var(--color-card), var(--color-card-soft))",
             borderRadius: 20,
             padding: 14,
             marginBottom: 14,
@@ -1418,6 +1418,84 @@ export default function App() {
     });
   }, []);
 
+  // ─── Background music (landing only) ───────
+  const musicRef = useRef(null);
+  const musicStartedRef = useRef(false);
+  const musicFadeRafRef = useRef(null);
+  // Keep refs in sync so the one-time interaction listener reads current state.
+  const pageRef = useRef(page);
+  const mutedRef = useRef(muted);
+  const learningOpenRef = useRef(learningIdiomId != null);
+  useEffect(() => { pageRef.current = page; }, [page]);
+  useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { learningOpenRef.current = learningIdiomId != null; }, [learningIdiomId]);
+
+  const fadeMusicTo = useCallback((target, duration) => {
+    const audio = musicRef.current;
+    if (!audio) return;
+    if (musicFadeRafRef.current) cancelAnimationFrame(musicFadeRafRef.current);
+    const start = audio.volume;
+    const t0 = performance.now();
+    const step = (now) => {
+      const elapsed = now - t0;
+      const t = Math.min(elapsed / duration, 1);
+      audio.volume = Math.max(0, Math.min(1, start + (target - start) * t));
+      if (t < 1) {
+        musicFadeRafRef.current = requestAnimationFrame(step);
+      } else {
+        musicFadeRafRef.current = null;
+      }
+    };
+    musicFadeRafRef.current = requestAnimationFrame(step);
+  }, []);
+
+  const applyMusicState = useCallback(() => {
+    const audio = musicRef.current;
+    if (!audio) return;
+    if (mutedRef.current || pageRef.current !== "landing") {
+      audio.pause();
+      return;
+    }
+    try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
+    const target = learningOpenRef.current ? 0.08 : 0.3;
+    fadeMusicTo(target, 500);
+  }, [fadeMusicTo]);
+
+  // Start the music on the first user interaction with the page (autoplay rules).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const startMusic = () => {
+      if (musicStartedRef.current) return;
+      musicStartedRef.current = true;
+      try {
+        const a = new Audio("/audio/bg-music.mp3");
+        a.loop = true;
+        a.volume = 0;
+        musicRef.current = a;
+        applyMusicState();
+      } catch (e) {
+        console.error("Music init failed", e);
+      }
+    };
+    const handler = () => {
+      startMusic();
+      window.removeEventListener("pointerdown", handler);
+      window.removeEventListener("touchstart", handler);
+      window.removeEventListener("keydown", handler);
+    };
+    window.addEventListener("pointerdown", handler, { once: true });
+    window.addEventListener("touchstart", handler, { once: true });
+    window.addEventListener("keydown", handler, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", handler);
+      window.removeEventListener("touchstart", handler);
+      window.removeEventListener("keydown", handler);
+    };
+  }, [applyMusicState]);
+
+  // React to page / mute / modal changes: play, pause, or fade the music.
+  useEffect(() => { applyMusicState(); }, [page, muted, learningIdiomId, applyMusicState]);
+
   const handleNav = (p) => {
     // Header/CTA nav always starts Learn at idiom 1; only zone-taps preserve selection.
     setSelectedIdiomId(null);
@@ -1427,7 +1505,7 @@ export default function App() {
   return (
     <div style={{
       minHeight: "100dvh",
-      background: "linear-gradient(180deg, var(--color-cream) 0%, var(--color-paper) 60%, #EAF4FF 100%)",
+      background: "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
     }}>
       {/* Floating mute toggle — always accessible, hidden by Catch's playing-phase
           overlay (z-index 60) and the LearningWindow modal (z-index 100). */}
@@ -1443,14 +1521,14 @@ export default function App() {
           right: "max(12px, env(safe-area-inset-right))",
           width: 42, height: 42,
           borderRadius: "50%",
-          background: muted ? "rgba(239, 111, 92, 0.95)" : "rgba(255, 255, 255, 0.85)",
-          backdropFilter: "blur(8px)",
-          WebkitBackdropFilter: "blur(8px)",
-          border: muted ? "1px solid rgba(239, 111, 92, 0.7)" : "1px solid rgba(255, 255, 255, 0.7)",
-          color: muted ? "#fff" : "var(--color-ink)",
+          background: muted ? "rgba(239, 111, 92, 0.85)" : "rgba(255, 255, 255, 0.10)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: muted ? "1px solid rgba(239, 111, 92, 0.7)" : "1px solid rgba(255, 255, 255, 0.18)",
+          color: "#fff",
           fontSize: 18,
           cursor: "pointer",
-          boxShadow: "0 4px 12px rgba(15, 23, 42, 0.18)",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.45)",
           zIndex: 40,
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           WebkitTapHighlightColor: "transparent",
@@ -1472,15 +1550,15 @@ export default function App() {
             height: 42,
             padding: "0 14px",
             borderRadius: 999,
-            background: "rgba(255, 255, 255, 0.88)",
-            backdropFilter: "blur(8px)",
-            WebkitBackdropFilter: "blur(8px)",
-            border: "1px solid rgba(255, 255, 255, 0.7)",
-            color: "var(--color-ink)",
+            background: "rgba(255, 255, 255, 0.10)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            border: "1px solid rgba(255, 255, 255, 0.18)",
+            color: "#fff",
             fontFamily: "var(--font-display)",
             fontWeight: 700, fontSize: 14,
             cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(15, 23, 42, 0.18)",
+            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.45)",
             zIndex: 40,
             display: "inline-flex", alignItems: "center", gap: 6,
             WebkitTapHighlightColor: "transparent",

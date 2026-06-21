@@ -2,29 +2,31 @@
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 html, body { height: 100%; }
 
-/* ─── Palette & tokens (warm blue → cream) ──── */
+/* ─── Palette & tokens (dark theme) ──── */
 :root {
-  /* Brand */
-  --color-ink: #1E3A5F;          /* deep ocean blue */
+  /* Brand-blue accents — kept dark for gradient buttons that need contrast */
+  --color-ink: #1E3A5F;          /* deep navy accent */
   --color-ink-soft: #2D5F8A;     /* mid blue */
   --color-ink-line: #94C5F0;     /* sky accent */
 
-  /* Warm cream surface */
-  --color-cream: #FFF7E8;
-  --color-cream-deep: #FBEDD0;
-  --color-paper: #FFFDF7;
+  /* Dark surface stack (var names kept for backward compat) */
+  --color-cream: #0f1118;        /* page background base */
+  --color-cream-deep: #1a1d2e;   /* top of body gradient */
+  --color-paper: #1e2235;        /* card surface */
+  --color-card: #1e2235;         /* alias — card background */
+  --color-card-soft: #252a40;    /* lighter card variant (striped lists, inner panels) */
 
-  /* Accents */
-  --color-sun: #F59E0B;          /* warm gold */
+  /* Bright accents — unchanged, they pop on dark */
+  --color-sun: #F59E0B;
   --color-sun-deep: #D97706;
-  --color-coral: #EF6F5C;        /* playful coral */
-  --color-leaf: #16A34A;         /* friendly green */
-  --color-grape: #7C3AED;        /* purple pop */
+  --color-coral: #EF6F5C;
+  --color-leaf: #16A34A;
+  --color-grape: #7C3AED;
 
-  /* Neutrals */
-  --color-text: #1E293B;
-  --color-muted: #64748B;
-  --color-line: #E5E7EB;
+  /* Text (light on dark) */
+  --color-text: #F5F0E8;         /* primary text — warm cream */
+  --color-muted: #94A3B8;        /* secondary / muted text */
+  --color-line: #2d3147;         /* subtle borders on dark cards */
 
   /* Radii */
   --r-sm: 10px;
@@ -33,10 +35,10 @@ html, body { height: 100%; }
   --r-xl: 28px;
   --r-pill: 9999px;
 
-  /* Shadows */
-  --shadow-sm: 0 2px 6px rgba(30, 58, 95, 0.08);
-  --shadow-md: 0 6px 18px rgba(30, 58, 95, 0.12);
-  --shadow-lg: 0 14px 40px rgba(30, 58, 95, 0.18);
+  /* Shadows — deeper on dark backgrounds */
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.50);
+  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.60);
   --shadow-glow-sun: 0 8px 24px rgba(245, 158, 11, 0.35);
   --shadow-glow-coral: 0 8px 24px rgba(239, 111, 92, 0.35);
   --shadow-glow-leaf: 0 8px 24px rgba(22, 163, 74, 0.30);
@@ -57,7 +59,9 @@ html, body { height: 100%; }
 body {
   font-family: var(--font-body);
   color: var(--color-text);
-  background: var(--color-cream);
+  background: linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%);
+  background-attachment: fixed;
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-size: 16px;
@@ -69,7 +73,7 @@ body {
 h1, h2, h3, h4 {
   font-family: var(--font-display);
   font-weight: 700;
-  color: var(--color-ink);
+  color: var(--color-text);
   letter-spacing: -0.01em;
   line-height: 1.15;
 }

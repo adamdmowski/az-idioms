@@ -115,7 +115,7 @@ function StartScreen({ highScore, onStart, onBack, ready }) {
       <h1 style={{
         fontFamily: "var(--font-display)",
         fontSize: "clamp(34px, 9vw, 48px)",
-        color: "var(--color-ink)",
+        color: "var(--color-text)",
         margin: "8px 0 10px",
         letterSpacing: "0.5px",
       }}>Catch!</h1>
@@ -179,7 +179,7 @@ function StartScreen({ highScore, onStart, onBack, ready }) {
           className="az-tap"
           style={{
             background: "transparent",
-            color: "var(--color-ink)",
+            color: "var(--color-text)",
             border: "2px solid var(--color-line)",
             padding: "12px 24px",
             borderRadius: 16,
@@ -258,7 +258,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
       <h1 style={{
         fontFamily: "var(--font-display)",
         fontSize: "clamp(28px, 7vw, 36px)",
-        color: "var(--color-ink)",
+        color: "var(--color-text)",
         margin: "6px 0 0",
       }}>{message}</h1>
 
@@ -266,7 +266,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
         marginTop: 18,
         width: "100%",
         maxWidth: 380,
-        background: "#fff",
+        background: "var(--color-card)",
         borderRadius: 22,
         padding: 22,
         boxShadow: "var(--shadow-md)",
@@ -281,7 +281,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
         <div style={{
           fontFamily: "var(--font-display)",
           fontSize: 56, fontWeight: 700,
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
           lineHeight: 1,
           marginTop: 4,
         }}>{score}</div>
@@ -312,7 +312,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
           marginTop: 18,
           width: "100%",
           maxWidth: 380,
-          background: "#fff",
+          background: "var(--color-card)",
           borderRadius: 18,
           padding: "16px 16px 18px",
           boxShadow: "var(--shadow-sm)",
@@ -410,7 +410,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
                 style={{
                   width: "100%",
                   background: "transparent",
-                  color: "var(--color-ink)",
+                  color: "var(--color-text)",
                   border: "2px solid var(--color-line)",
                   padding: "11px",
                   borderRadius: 12,
@@ -451,8 +451,8 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
           onClick={onBack}
           className="az-tap"
           style={{
-            background: "#fff",
-            color: "var(--color-ink)",
+            background: "var(--color-card)",
+            color: "var(--color-text)",
             border: "2px solid var(--color-line)",
             padding: "14px",
             borderRadius: 16,
@@ -819,7 +819,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
     <div style={{
       position: "fixed",
       inset: 0,
-      background: "linear-gradient(180deg, #FFF5DC 0%, #E2F0FB 100%)",
+      background: "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
       display: "flex",
       flexDirection: "column",
       zIndex: 60,
@@ -833,15 +833,15 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
         gridTemplateColumns: "minmax(60px, auto) 1fr minmax(80px, auto)",
         alignItems: "center",
         gap: 10,
-        background: "rgba(255, 255, 255, 0.65)",
-        backdropFilter: "blur(8px)",
-        WebkitBackdropFilter: "blur(8px)",
-        borderBottom: "1px solid rgba(15, 23, 42, 0.06)",
+        background: "rgba(15, 17, 24, 0.65)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
       }}>
         <div style={{
           fontFamily: "var(--font-display)",
           fontSize: 26, fontWeight: 700,
-          color: "var(--color-ink)",
+          color: "var(--color-text)",
           lineHeight: 1,
         }}>{score}</div>
 
@@ -850,7 +850,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
             fontFamily: "var(--font-display)",
             fontSize: "clamp(14px, 4vw, 18px)",
             fontWeight: 700,
-            color: "var(--color-ink)",
+            color: "var(--color-text)",
             lineHeight: 1.2,
             padding: "0 4px",
           }}>
@@ -922,8 +922,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
               <div className={popClass} style={{
                 width: "100%", height: "100%",
                 borderRadius: "50%",
-                background: "rgba(255, 255, 255, 0.92)",
-                boxShadow: "0 6px 16px rgba(30, 58, 95, 0.22), inset 0 0 0 2px rgba(255,255,255,0.6)",
+                background: "rgba(245, 240, 232, 0.95)",
+                boxShadow: "0 6px 16px rgba(0, 0, 0, 0.55), inset 0 0 0 2px rgba(255,255,255,0.4)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 overflow: "hidden",
               }}>
@@ -978,14 +978,16 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
             position: "absolute",
             bottom: "max(10px, env(safe-area-inset-bottom))",
             left: 12,
-            background: "rgba(255,255,255,0.9)",
-            border: "1px solid var(--color-line)",
-            color: "var(--color-ink)",
+            background: "rgba(255, 255, 255, 0.10)",
+            border: "1px solid rgba(255, 255, 255, 0.18)",
+            color: "#fff",
             padding: "6px 12px",
             borderRadius: 999,
             fontFamily: "var(--font-display)",
             fontSize: 11, fontWeight: 700,
             cursor: "pointer",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
             boxShadow: "var(--shadow-sm)",
             zIndex: 5,
             WebkitTapHighlightColor: "transparent",
