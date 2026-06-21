@@ -1007,6 +1007,9 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   const startIdx = Math.max(0, ordered.findIndex((it) => it.id === initialId));
   const [idx, setIdx] = useState(startIdx);
   const [closing, setClosing] = useState(false);
+  // Meaning starts hidden — kid recalls the idiom from the name + picture
+  // before tapping to reveal. Resets when the idiom changes (swipe/arrow).
+  const [meaningRevealed, setMeaningRevealed] = useState(false);
 
   const current = ordered[idx];
   const cutout = cutouts.find((c) => c.id === current.id);
@@ -1063,8 +1066,10 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   // Autoplay: play the idiom name on open and on every idiom change.
   // Short 100ms gap lets the music's hard-pause settle before the voice starts.
   // The cleanup cancels both the pending timer and any in-flight playback, so
-  // prev/next/swipe never queue or overlap.
+  // prev/next/swipe never queue or overlap. Also re-hides the meaning so each
+  // new idiom starts with the recall-then-reveal interaction.
   useEffect(() => {
+    setMeaningRevealed(false);
     const t = setTimeout(() => { playForIdiom(current, "name"); }, 100);
     return () => {
       clearTimeout(t);
@@ -1263,16 +1268,42 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             )}
           </div>
 
-          {/* Meaning */}
+          {/* Meaning — tap-to-reveal so the kid recalls from the name + picture first */}
           <LearningSection title="Meaning" color="var(--color-grape)">
-            <div>{current.meaning}</div>
-            {meaningPL && (
-              <div style={{
-                marginTop: 6,
-                fontSize: 13,
-                color: "var(--color-muted)",
-                fontWeight: 600,
-              }}>{meaningPL}</div>
+            {!meaningRevealed ? (
+              <button
+                onClick={() => setMeaningRevealed(true)}
+                aria-label="Reveal meaning"
+                aria-expanded="false"
+                className="az-tap"
+                style={{
+                  display: "block",
+                  width: "100%",
+                  background: "linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(124, 58, 237, 0.08))",
+                  border: "2px dashed rgba(124, 58, 237, 0.55)",
+                  borderRadius: "var(--r-md)",
+                  padding: "16px 14px",
+                  color: "var(--color-text)",
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: 17,
+                  textAlign: "center",
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >🤔 What does it mean?</button>
+            ) : (
+              <div style={{ animation: "az-fade-in 320ms var(--ease-out) both" }}>
+                <div>{current.meaning}</div>
+                {meaningPL && (
+                  <div style={{
+                    marginTop: 6,
+                    fontSize: 13,
+                    color: "var(--color-muted)",
+                    fontWeight: 600,
+                  }}>{meaningPL}</div>
+                )}
+              </div>
             )}
           </LearningSection>
 
