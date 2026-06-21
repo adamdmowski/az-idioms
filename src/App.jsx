@@ -1286,15 +1286,8 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             )}
           </div>
 
-          {/* Polish equivalent idiom — only when one exists */}
-          {equivalentPL && (
-            <LearningSection title="🇵🇱 Polski odpowiednik" color="var(--color-sun)">
-              <span style={{ fontStyle: "italic" }}>"{equivalentPL}"</span>
-            </LearningSection>
-          )}
-
-          {/* What it means */}
-          <LearningSection title="Co to znaczy" color="var(--color-grape)">
+          {/* Meaning */}
+          <LearningSection title="Meaning" color="var(--color-grape)">
             <div>{current.meaning}</div>
             {meaningPL && (
               <div style={{
@@ -1307,7 +1300,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
           </LearningSection>
 
           {/* Example */}
-          <LearningSection title="Przykład" color="var(--color-leaf)">
+          <LearningSection title="Example" color="var(--color-leaf)">
             <div>
               <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
               <button
@@ -1339,10 +1332,51 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             )}
           </LearningSection>
 
-          {/* Did you know? — Polish */}
-          {funFactPL && (
-            <LearningSection title="💡 Czy wiedziałeś?" color="var(--color-sun-deep)">
-              {funFactPL}
+          {/* Polish equivalent idiom — only when one exists. The label is
+              a small Polish flag SVG instead of text. */}
+          {equivalentPL && (
+            <LearningSection
+              title={
+                <svg
+                  width="22"
+                  height="14"
+                  viewBox="0 0 22 14"
+                  aria-label="Polish translation"
+                  style={{
+                    display: "inline-block",
+                    verticalAlign: "middle",
+                    filter: "drop-shadow(0 1px 1px rgba(0,0,0,0.35))",
+                  }}
+                >
+                  <defs>
+                    <clipPath id="pl-flag-clip">
+                      <rect x="0" y="0" width="22" height="14" rx="2" ry="2" />
+                    </clipPath>
+                  </defs>
+                  <g clipPath="url(#pl-flag-clip)">
+                    <rect x="0" y="0" width="22" height="7" fill="#fff" />
+                    <rect x="0" y="7" width="22" height="7" fill="#DC143C" />
+                  </g>
+                </svg>
+              }
+              color="var(--color-sun)"
+            >
+              <span style={{ fontStyle: "italic" }}>"{equivalentPL}"</span>
+            </LearningSection>
+          )}
+
+          {/* Did you know? — English with Polish translation underneath */}
+          {(current.funFact || funFactPL) && (
+            <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
+              {current.funFact && <div>{current.funFact}</div>}
+              {funFactPL && (
+                <div style={{
+                  marginTop: current.funFact ? 6 : 0,
+                  fontSize: 13,
+                  color: "var(--color-muted)",
+                  fontWeight: 600,
+                }}>{funFactPL}</div>
+              )}
             </LearningSection>
           )}
         </div>
