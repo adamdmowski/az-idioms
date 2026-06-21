@@ -364,10 +364,21 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
     <main
       className="az-fade-in"
       style={{
+        minHeight: "100dvh",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        alignItems: "center",
         textAlign: "center",
-        padding: "12px 10px 28px",
+        // Top padding clears the floating mute/music buttons (notched + non-notched).
+        paddingTop: "max(64px, calc(env(safe-area-inset-top, 0px) + 60px))",
+        paddingRight: 10,
+        paddingBottom: "max(28px, env(safe-area-inset-bottom, 28px))",
+        paddingLeft: 10,
         maxWidth: 760,
-        margin: "0 auto",
+        marginLeft: "auto",
+        marginRight: "auto",
+        boxSizing: "border-box",
       }}
     >
       {/* The interactive illustration ─────────────────────────────────── */}
@@ -1536,6 +1547,10 @@ export default function App() {
         const a = new Audio("/audio/bg-music.mp3");
         a.loop = true;
         a.volume = 0;
+        // Eagerly start fetching the file. iOS Safari sometimes refuses to
+        // play() inside a gesture handler if the file hasn't begun loading.
+        a.preload = "auto";
+        try { a.load(); } catch (_) { /* ignore */ }
         musicRef.current = a;
       } catch (e) {
         console.error("Music init failed", e);
@@ -1567,10 +1582,18 @@ export default function App() {
         // Synchronous play() inside the gesture — this is the key bit.
         const p = audio.play();
         if (p && typeof p.catch === "function") p.catch(() => {});
+        // If a learning window is already open at the moment of the gesture
+        // (rare — e.g. modal mounts before this listener fires), skip the
+        // up-fade and pin the start volume to the modal-open level.
+        if (learningOpenRef.current) {
+          audio.volume = 0.08;
+        }
       }
-      // Adjust volume / mute / page state on the next tick so any pause-or-fade
-      // happens AFTER the audio element has been activated by the gesture.
-      setTimeout(() => applyMusicState(), 50);
+      // Wait long enough that any tap-on-character flow (handleZoneTap defers
+      // setLearningIdiomId by ~220ms) has propagated before we settle the
+      // volume — otherwise the music briefly fades up to 0.3 before dropping
+      // to 0.08 when the modal opens.
+      setTimeout(() => applyMusicState(), 300);
 
       window.removeEventListener("pointerdown", handler);
       window.removeEventListener("touchstart", handler);
@@ -1648,7 +1671,7 @@ export default function App() {
           fontSize: 14,
           cursor: "pointer",
           boxShadow: "0 4px 12px rgba(0, 0, 0, 0.45)",
-          zIndex: 40,
+          zIndex: 50,
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           WebkitTapHighlightColor: "transparent",
           opacity: musicOff ? 0.65 : 1,
@@ -1680,7 +1703,7 @@ export default function App() {
           fontSize: 18,
           cursor: "pointer",
           boxShadow: "0 4px 12px rgba(0, 0, 0, 0.45)",
-          zIndex: 40,
+          zIndex: 50,
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           WebkitTapHighlightColor: "transparent",
         }}
@@ -1710,7 +1733,7 @@ export default function App() {
             fontWeight: 700, fontSize: 14,
             cursor: "pointer",
             boxShadow: "0 4px 12px rgba(0, 0, 0, 0.45)",
-            zIndex: 40,
+            zIndex: 50,
             display: "inline-flex", alignItems: "center", gap: 6,
             WebkitTapHighlightColor: "transparent",
           }}
