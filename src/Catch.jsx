@@ -13,15 +13,16 @@ function savePlayerName(n) {
 // ─── Constants ──────────────────────────
 const HIGHSCORE_KEY = "azidioms_catch_highscore";
 const LIVES_START = 3;
-const N_CHARS = 3;             // total characters per drop (1 correct + 2 distractors)
 const PROMPTS_PER_ROUND = 14;
 const NEXT_AFTER_CORRECT_MS = 600;
-const NEXT_AFTER_MISS_MS = 700;
+const DURATION_SEC = 5.5;                  // crossing time R → L (no ramp)
+const SPAWN_MS = 900;                       // ≈6 floaters on screen at once
+const MAX_DISTRACTORS_BEFORE_CORRECT = 3;   // force a correct spawn at least this often
+const CORRECT_SPAWN_CHANCE = 0.30;          // otherwise base chance to spawn the correct one
 
-function getDuration(idx) {
-  if (idx < 5) return 4.0;
-  if (idx < 10) return 3.0;
-  return 2.5;
+// Character sizing — ~75px on phones, ~95px on tablets/desktop
+function computeCharSize(playW) {
+  return Math.min(Math.max(playW * 0.20, 74), 95);
 }
 
 function shuffle(arr) {
@@ -465,6 +466,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
   );
 }
 
+
 // ─── Main game component ────────────────
 export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
   const [phase, setPhase] = useState("start"); // 'start' | 'playing' | 'over'
@@ -473,28 +475,31 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
   const [lives, setLives] = useState(LIVES_START);
   const [promptIdx, setPromptIdx] = useState(0);
   const [shuffled, setShuffled] = useState([]);
-  const [fallers, setFallers] = useState([]);
-  const [flash, setFlash] = useState(null);   // {kind:'correct'|'wrong'|'missed', key?}
+  const [floaters, setFloaters] = useState([]);
+  const [flash, setFlash] = useState(null);   // { kind: 'correct' | 'wrong', key }
   const [confetti, setConfetti] = useState([]);
   const [highScore, setHighScore] = useState(loadHigh);
   const [newHigh, setNewHigh] = useState(false);
 
   const playAreaRef = useRef(null);
-  const fallerRefs = useRef({});
+  const floaterRefs = useRef({});
   const rafRef = useRef(null);
-  const waveStartRef = useRef(0);
-  const tappedKeysRef = useRef(new Set());
-  const fallersRef = useRef([]);
+  const spawnTimerRef = useRef(null);
+  const tappedKeysRef = useRef(new Set());     // tapped OR exited keys — skipped by RAF
+  const floatersRef = useRef([]);
+  const shuffledRef = useRef([]);
   const promptIdxRef = useRef(0);
   const scoreRef = useRef(0);
   const comboRef = useRef(1);
+  const lockedRef = useRef(false);              // true during the 600ms after a correct tap
+  const spawnsSinceCorrectRef = useRef(0);
   const advanceTimerRef = useRef(null);
   const flashClearTimerRef = useRef(null);
   const confettiTimersRef = useRef(new Set());
-  const handleMissRef = useRef(() => {});
 
-  // Keep refs in sync with state for use inside RAF / setTimeout
-  useEffect(() => { fallersRef.current = fallers; }, [fallers]);
+  // Sync refs with state so RAF / setInterval closures see current values
+  useEffect(() => { floatersRef.current = floaters; }, [floaters]);
+  useEffect(() => { shuffledRef.current = shuffled; }, [shuffled]);
   useEffect(() => { promptIdxRef.current = promptIdx; }, [promptIdx]);
   useEffect(() => { scoreRef.current = score; }, [score]);
   useEffect(() => { comboRef.current = combo; }, [combo]);
@@ -503,32 +508,34 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
   const currentIdiom = shuffled[promptIdx];
   const promptText = currentIdiom ? currentIdiom.name : "";
 
-  // ── Lifecycle: startGame ────────────────
+  // ── Lifecycle: startGame ───────────────
   const startGame = useCallback(() => {
-    // Initialize / resume the audio context inside the user gesture
-    getAudioCtx();
+    getAudioCtx(); // create / resume audio context inside the user gesture
     setShuffled(shuffle(idioms));
     setScore(0);
     setCombo(1);
     setLives(LIVES_START);
     setPromptIdx(0);
-    setFallers([]);
+    setFloaters([]);
     setFlash(null);
     setConfetti([]);
     setNewHigh(false);
     tappedKeysRef.current = new Set();
     scoreRef.current = 0;
     comboRef.current = 1;
+    spawnsSinceCorrectRef.current = 0;
+    lockedRef.current = false;
     setPhase("playing");
   }, [idioms]);
 
   // ── Lifecycle: finishGame ───────────────
   const finishGame = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (spawnTimerRef.current) { clearInterval(spawnTimerRef.current); spawnTimerRef.current = null; }
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (flashClearTimerRef.current) { clearTimeout(flashClearTimerRef.current); flashClearTimerRef.current = null; }
     cancelAudio();
-    setFallers([]);
+    setFloaters([]);
     setFlash(null);
     const final = scoreRef.current;
     setHighScore((h) => {
@@ -542,7 +549,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
     setPhase("over");
   }, []);
 
-  // ── Wave setup: runs whenever promptIdx changes during play ──
+  // ── On prompt change: play the audio. On completion: finish. ──
   useEffect(() => {
     if (phase !== "playing") return;
     if (promptIdx >= PROMPTS_PER_ROUND) {
@@ -550,34 +557,83 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
       return;
     }
     const idiom = shuffled[promptIdx];
-    if (!idiom) return; // shuffled not yet primed
-
+    if (!idiom) return;
     playForIdiom(idiom, "name");
+  }, [phase, promptIdx, shuffled, finishGame]);
 
-    const distractors = shuffle(idioms.filter((x) => x.id !== idiom.id)).slice(0, N_CHARS - 1);
-    const all = shuffle([idiom, ...distractors]);
-
-    const slotCenters = Array.from({ length: N_CHARS }, (_, i) => (i + 0.5) / N_CHARS);
-    const jittered = slotCenters.map((c) => c + (Math.random() - 0.5) * 0.04);
-
-    const wave = all.map((it, i) => ({
-      key: `p${promptIdx}-c${i}-${it.id}-${Date.now()}`,
-      idiomId: it.id,
-      isCorrect: it.id === idiom.id,
-      startXPercent: jittered[i],
-      phaseOffset: Math.random() * Math.PI * 2,
-    }));
-
-    tappedKeysRef.current = new Set();
-    waveStartRef.current = performance.now();
-    setFallers(wave);
-  }, [phase, promptIdx, shuffled, idioms, finishGame]);
-
-  // ── RAF loop: drive falling animation ───
+  // ── Spawn loop: a new floater drifts in from the right every SPAWN_MS ──
   useEffect(() => {
     if (phase !== "playing") return;
-    if (fallers.length === 0) return;
+    if (shuffled.length === 0) return;
 
+    const doSpawn = () => {
+      const playArea = playAreaRef.current;
+      if (!playArea) return;
+      const playW = playArea.offsetWidth;
+      const playH = playArea.offsetHeight;
+      const charSize = computeCharSize(playW);
+
+      const correctIdiom = shuffledRef.current[promptIdxRef.current];
+      if (!correctIdiom) return;
+
+      // Pick the idiom for this spawn. Guarantee the correct one appears at
+      // least every MAX_DISTRACTORS_BEFORE_CORRECT spawns; otherwise random.
+      let idiomForSpawn;
+      if (spawnsSinceCorrectRef.current >= MAX_DISTRACTORS_BEFORE_CORRECT) {
+        idiomForSpawn = correctIdiom;
+        spawnsSinceCorrectRef.current = 0;
+      } else if (Math.random() < CORRECT_SPAWN_CHANCE) {
+        idiomForSpawn = correctIdiom;
+        spawnsSinceCorrectRef.current = 0;
+      } else {
+        const others = idioms.filter((i) => i.id !== correctIdiom.id);
+        idiomForSpawn = others[Math.floor(Math.random() * others.length)];
+        spawnsSinceCorrectRef.current++;
+      }
+
+      // Pick a Y that doesn't overlap a recently-spawned floater (only those
+      // still near the right edge can collide in X with this new one).
+      const now = performance.now();
+      const minSepRatio = (charSize * 0.95) / Math.max(1, playH);
+      let yPercent = 0.05 + Math.random() * 0.75;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        const trial = 0.05 + Math.random() * 0.75;
+        const conflict = floatersRef.current.some((f) => {
+          if (tappedKeysRef.current.has(f.key)) return false;
+          const elapsed = (now - f.startTime) / 1000;
+          const progress = elapsed / DURATION_SEC;
+          if (progress > 0.22) return false; // already moved far enough left
+          return Math.abs(f.yPercent - trial) < minSepRatio;
+        });
+        yPercent = trial;
+        if (!conflict) break;
+      }
+
+      const newFloater = {
+        key: `f-${now.toFixed(0)}-${Math.random().toString(36).slice(2, 8)}`,
+        idiomId: idiomForSpawn.id,
+        yPercent,
+        phaseOffset: Math.random() * Math.PI * 2,
+        startTime: now,
+      };
+
+      setFloaters((prev) => [...prev, newFloater]);
+    };
+
+    doSpawn(); // first floater appears immediately
+    spawnTimerRef.current = setInterval(doSpawn, SPAWN_MS);
+
+    return () => {
+      if (spawnTimerRef.current) {
+        clearInterval(spawnTimerRef.current);
+        spawnTimerRef.current = null;
+      }
+    };
+  }, [phase, shuffled, idioms]);
+
+  // ── RAF loop: drive horizontal flow + sweep exited floaters ──
+  useEffect(() => {
+    if (phase !== "playing") return;
     const isReduced = reducedMotion();
     let stopped = false;
 
@@ -590,30 +646,32 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
       }
       const playW = playArea.offsetWidth;
       const playH = playArea.offsetHeight;
-      const charSize = Math.min(Math.max(playW * 0.22, 78), 104);
-      const maxY = Math.max(0, playH - charSize - 14);
+      const charSize = computeCharSize(playW);
+      const totalDist = playW + charSize;
 
-      const duration = getDuration(promptIdxRef.current);
-      const elapsed = (now - waveStartRef.current) / 1000;
-      const progress = Math.min(elapsed / duration, 1);
-
-      fallersRef.current.forEach((faller) => {
-        if (tappedKeysRef.current.has(faller.key)) return;
-        const node = fallerRefs.current[faller.key];
+      const exited = [];
+      floatersRef.current.forEach((f) => {
+        if (tappedKeysRef.current.has(f.key)) return;
+        const node = floaterRefs.current[f.key];
         if (!node) return;
-        const xBase = faller.startXPercent * playW - charSize / 2;
-        const wobble = isReduced ? 0 : Math.sin(elapsed * 2.8 + faller.phaseOffset) * 5;
-        const y = progress * maxY;
-        node.style.transform = `translate3d(${xBase + wobble}px, ${y}px, 0)`;
+
+        const elapsed = (now - f.startTime) / 1000;
+        const progress = elapsed / DURATION_SEC;
+        if (progress >= 1) {
+          // Off the left edge — silently remove (no life lost).
+          tappedKeysRef.current.add(f.key);
+          exited.push(f.key);
+          return;
+        }
+        const x = playW - totalDist * progress;
+        const yBase = f.yPercent * (playH - charSize);
+        const wobble = isReduced ? 0 : Math.sin(elapsed * 2.4 + f.phaseOffset) * 5;
+        node.style.transform = `translate3d(${x}px, ${yBase + wobble}px, 0)`;
       });
 
-      if (progress >= 1) {
-        // Wave timed out — if the correct one wasn't tapped, it's a miss
-        const correctFaller = fallersRef.current.find((f) => f.isCorrect);
-        if (correctFaller && !tappedKeysRef.current.has(correctFaller.key)) {
-          handleMissRef.current();
-        }
-        return; // stop RAF; next wave starts the cycle again
+      if (exited.length > 0) {
+        const drop = new Set(exited);
+        setFloaters((prev) => prev.filter((f) => !drop.has(f.key)));
       }
 
       rafRef.current = requestAnimationFrame(loop);
@@ -625,12 +683,12 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
       stopped = true;
       if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     };
-  }, [fallers, phase]);
+  }, [phase]);
 
   // ── Confetti spawner ─────────────────────
   const spawnConfetti = useCallback((key) => {
     if (reducedMotion()) return;
-    const node = fallerRefs.current[key];
+    const node = floaterRefs.current[key];
     const playArea = playAreaRef.current;
     if (!node || !playArea) return;
     const rect = node.getBoundingClientRect();
@@ -661,34 +719,39 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
     confettiTimersRef.current.add(t);
   }, []);
 
-  // ── Tap handlers (stable identity, use refs internally) ──
-  const handleCorrect = useCallback((faller) => {
-    // Clear ALL fallers from this wave
-    fallersRef.current.forEach((f) => tappedKeysRef.current.add(f.key));
+  // ── Tap handlers ──
+  const handleCorrect = useCallback((floater) => {
+    lockedRef.current = true;
+    tappedKeysRef.current.add(floater.key);
     const c = comboRef.current;
     setScore((s) => s + 10 * c);
     setCombo(c + 1);
     comboRef.current = c + 1;
     correctSound();
-    spawnConfetti(faller.key);
-    setFlash({ kind: "correct", key: faller.key });
+    spawnConfetti(floater.key);
+    setFlash({ kind: "correct", key: floater.key });
+
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
       advanceTimerRef.current = null;
+      // Remove just THIS floater — the rest of the stream keeps flowing.
+      setFloaters((prev) => prev.filter((f) => f.key !== floater.key));
       setFlash(null);
+      lockedRef.current = false;
       setPromptIdx((p) => p + 1);
     }, NEXT_AFTER_CORRECT_MS);
   }, [spawnConfetti]);
 
-  const handleWrong = useCallback((faller) => {
-    tappedKeysRef.current.add(faller.key);
+  const handleWrong = useCallback((floater) => {
+    tappedKeysRef.current.add(floater.key);
     setCombo(1);
     comboRef.current = 1;
     wrongSound();
-    setFlash({ kind: "wrong", key: faller.key });
+    setFlash({ kind: "wrong", key: floater.key });
     if (flashClearTimerRef.current) clearTimeout(flashClearTimerRef.current);
     flashClearTimerRef.current = setTimeout(() => {
       flashClearTimerRef.current = null;
+      setFloaters((prev) => prev.filter((f) => f.key !== floater.key));
       setFlash(null);
     }, 420);
     setLives((l) => {
@@ -698,52 +761,27 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
         advanceTimerRef.current = setTimeout(() => {
           advanceTimerRef.current = null;
           finishGame();
-        }, 350);
+        }, 450);
         return 0;
       }
       return next;
     });
   }, [finishGame]);
 
-  const handleMiss = useCallback(() => {
-    fallersRef.current.forEach((f) => tappedKeysRef.current.add(f.key));
-    setCombo(1);
-    comboRef.current = 1;
-    wrongSound();
-    setFlash({ kind: "missed" });
-    setLives((l) => {
-      const next = l - 1;
-      if (next <= 0) {
-        if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-        advanceTimerRef.current = setTimeout(() => {
-          advanceTimerRef.current = null;
-          finishGame();
-        }, NEXT_AFTER_MISS_MS);
-        return 0;
-      }
-      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = setTimeout(() => {
-        advanceTimerRef.current = null;
-        setFlash(null);
-        setPromptIdx((p) => p + 1);
-      }, NEXT_AFTER_MISS_MS);
-      return next;
-    });
-  }, [finishGame]);
-
-  // Mirror handleMiss into a ref so the RAF callback always sees the latest version
-  useEffect(() => { handleMissRef.current = handleMiss; }, [handleMiss]);
-
-  const handleTap = useCallback((faller) => {
-    if (tappedKeysRef.current.has(faller.key)) return;
-    if (faller.isCorrect) handleCorrect(faller);
-    else handleWrong(faller);
+  const handleTap = useCallback((floater) => {
+    if (tappedKeysRef.current.has(floater.key)) return;
+    if (lockedRef.current) return;             // mid-transition after a correct tap
+    const target = shuffledRef.current[promptIdxRef.current];
+    if (!target) return;
+    if (floater.idiomId === target.id) handleCorrect(floater);
+    else handleWrong(floater);
   }, [handleCorrect, handleWrong]);
 
   // ── Cleanup on unmount ─────────────────
   useEffect(() => {
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (spawnTimerRef.current) clearInterval(spawnTimerRef.current);
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
       if (flashClearTimerRef.current) clearTimeout(flashClearTimerRef.current);
       confettiTimersRef.current.forEach((t) => clearTimeout(t));
@@ -849,28 +887,28 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
           overflow: "hidden",
         }}
       >
-        {fallers.map((faller) => {
-          const cutout = cutouts.find((c) => c.id === faller.idiomId);
-          const idiom = idioms.find((i) => i.id === faller.idiomId);
-          const isPopping = flash && flash.key === faller.key;
+        {floaters.map((floater) => {
+          const cutout = cutouts.find((c) => c.id === floater.idiomId);
+          const idiom = idioms.find((i) => i.id === floater.idiomId);
+          const isPopping = flash && flash.key === floater.key;
           const popClass = isPopping
             ? (flash.kind === "correct" ? "catch-pop-correct" : "catch-shake-wrong")
             : "";
-          const isTapped = tappedKeysRef.current.has(faller.key);
+          const isTapped = tappedKeysRef.current.has(floater.key);
           return (
             <button
-              key={faller.key}
+              key={floater.key}
               ref={(node) => {
-                if (node) fallerRefs.current[faller.key] = node;
-                else delete fallerRefs.current[faller.key];
+                if (node) floaterRefs.current[floater.key] = node;
+                else delete floaterRefs.current[floater.key];
               }}
-              onClick={() => handleTap(faller)}
+              onClick={() => handleTap(floater)}
               aria-label={idiom?.name || "character"}
               style={{
                 position: "absolute",
                 left: 0, top: 0,
-                width: "clamp(78px, 22vw, 104px)",
-                height: "clamp(78px, 22vw, 104px)",
+                width: "clamp(74px, 20vw, 95px)",
+                height: "clamp(74px, 20vw, 95px)",
                 padding: 0,
                 border: "none",
                 background: "transparent",
@@ -904,7 +942,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
                     }}
                   />
                 ) : (
-                  <span aria-hidden="true" style={{ fontSize: 36 }}>{idiom?.emoji}</span>
+                  <span aria-hidden="true" style={{ fontSize: 32 }}>{idiom?.emoji}</span>
                 )}
               </div>
             </button>
@@ -931,30 +969,6 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
             }}
           />
         ))}
-
-        {/* Miss flash */}
-        {flash && flash.kind === "missed" && (
-          <div style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(220, 38, 38, 0.18)",
-            pointerEvents: "none",
-            animation: "az-fade-in 180ms var(--ease-out) both",
-          }}>
-            <span style={{
-              background: "rgba(220, 38, 38, 0.95)",
-              color: "#fff",
-              padding: "10px 26px",
-              borderRadius: 999,
-              fontFamily: "var(--font-display)",
-              fontWeight: 800, fontSize: 22,
-              boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
-            }}>Missed!</span>
-          </div>
-        )}
 
         {/* Quit button — sits inside play area so it doesn't reposition the HUD */}
         <button
