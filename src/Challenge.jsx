@@ -158,13 +158,6 @@ function answerMatches(typed, expected) {
   }
   return false;
 }
-function buildHint(answer) {
-  return answer
-    .split(/\s+/)
-    .map((w) => (w ? w[0] + "_".repeat(Math.max(0, w.length - 1)) : ""))
-    .join(" ");
-}
-
 // ─── Web Audio SFX (lazy-init inside a user gesture) ──
 let _audioCtx = null;
 function getAudioCtx() {
@@ -449,9 +442,10 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [correctCount, setCorrectCount] = useState(0);
   const [pickedId, setPickedId] = useState(null);
   const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | null
-  const [typed, setTyped] = useState("");
-  const [revealed, setRevealed] = useState(false);
   const [showPL, setShowPL] = useState(false); // Medium-level Polish reveal toggle
+  // Hangman state (Hard + Boss fill questions)
+  const [guessedLetters, setGuessedLetters] = useState(new Set());
+  const [hintFlashLetter, setHintFlashLetter] = useState(null);
   // Replay loop — review missed questions before showing results
   const [activeQuestions, setActiveQuestions] = useState(questions);
   const [missedQuestions, setMissedQuestions] = useState([]);
@@ -459,7 +453,10 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [showTransition, setShowTransition] = useState(false);
   const timerRef = useRef(null);
   const correctCountRef = useRef(0);
-  const fillInputRef = useRef(null);
+  // Single-fire guards for the hangman win/lose/hint side effects
+  const wonRef = useRef(false);
+  const lostRef = useRef(false);
+  const hintTriggeredRef = useRef(false);
 
   const question = activeQuestions[questionIdx];
   const isLast = questionIdx + 1 >= activeQuestions.length;
@@ -471,9 +468,12 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     setAttempts(0);
     setPickedId(null);
     setFeedback(null);
-    setTyped("");
-    setRevealed(false);
     setShowPL(false);
+    setGuessedLetters(new Set());
+    setHintFlashLetter(null);
+    wonRef.current = false;
+    lostRef.current = false;
+    hintTriggeredRef.current = false;
     if (!question) return;
 
     // Auto-read the prompt at the START of each question — Easy + Medium only.
@@ -482,12 +482,6 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       playForIdiom(question.idiom, "name");
     } else if (level === "medium" && question.type === "meaning") {
       speakText(question.idiom.meaning);
-    }
-
-    // Autofocus the fill input on Hard / Boss fill questions
-    if (question.type === "fill") {
-      const t = setTimeout(() => { if (fillInputRef.current) fillInputRef.current.focus(); }, 60);
-      return () => clearTimeout(t);
     }
   }, [questionIdx, question?.type, level]);
 
@@ -548,44 +542,96 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     }
   };
 
-  // Fill submit handler (Hard / Boss fill)
-  const handleSubmitFill = () => {
-    if (!typed.trim() || feedback === "correct" || revealed) return;
-    const isCorrect = answerMatches(typed, question.answer);
+  // ── Hangman helpers (Hard + Boss fill questions) ───────
+  // Derive answer + letter sets from the current question.
+  const hangmanAnswer = (
+    question && question.type === "fill"
+      ? (question.primaryAnswer || question.idiom.name)
+      : ""
+  ).toLowerCase();
+  const hangmanAnswerLetters = new Set(
+    [...hangmanAnswer].filter((c) => /[a-z]/.test(c))
+  );
+  const correctlyGuessed = new Set(
+    [...guessedLetters].filter((l) => hangmanAnswerLetters.has(l))
+  );
+  const wrongLetters = [...guessedLetters].filter((l) => !hangmanAnswerLetters.has(l));
+  const wrongCount = wrongLetters.length;
+  const won =
+    question?.type === "fill" &&
+    hangmanAnswerLetters.size > 0 &&
+    [...hangmanAnswerLetters].every((l) => correctlyGuessed.has(l));
+  const lost = question?.type === "fill" && wrongCount >= 6;
+
+  const handleLetterTap = (letter) => {
+    if (!question || question.type !== "fill") return;
+    if (won || lost) return;
+    if (guessedLetters.has(letter)) return;
+    if (hintFlashLetter != null) return;        // pause input during a hint flash
+    if (feedback === "correct") return;
+
+    const isCorrect = hangmanAnswerLetters.has(letter);
     if (isCorrect) {
-      const firstTry = attempts === 0;
-      if (firstTry && !inReplay) setCorrectCount((c) => c + 1);
       correctSound();
-      playForIdiom(question.idiom, "name");
-      setFeedback("correct");
-      timerRef.current = setTimeout(advanceQuestion, 1000);
     } else {
-      // On the FIRST wrong of the original run, queue this for replay review
-      if (attempts === 0 && !inReplay) {
+      wrongSound();
+      // First wrong letter for this question → queue for the replay round
+      if (wrongCount === 0 && !inReplay) {
         setMissedQuestions((m) => [...m, question]);
       }
-      wrongSound();
-      const newAttempts = attempts + 1;
-      setAttempts(newAttempts);
-      setFeedback("wrong");
-      if (newAttempts >= 3) {
-        // Reveal & advance — counts as incorrect
-        timerRef.current = setTimeout(() => {
-          setFeedback(null);
-          setRevealed(true);
-          timerRef.current = setTimeout(advanceQuestion, 1500);
-        }, 400);
-      } else {
-        timerRef.current = setTimeout(() => {
-          setFeedback(null);
-        }, 500);
-      }
     }
+    setGuessedLetters((prev) => {
+      const next = new Set(prev);
+      next.add(letter);
+      return next;
+    });
   };
 
-  const handleFillKey = (e) => {
-    if (e.key === "Enter") handleSubmitFill();
-  };
+  // Win / lose / hint side effects — single-fire via refs
+  useEffect(() => {
+    if (!question || question.type !== "fill") return;
+
+    if (won && !wonRef.current) {
+      wonRef.current = true;
+      const firstTry = wrongCount === 0 && !inReplay;
+      if (firstTry) setCorrectCount((c) => c + 1);
+      playForIdiom(question.idiom, "name");
+      setFeedback("correct");
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(advanceQuestion, 1000);
+      return;
+    }
+
+    if (lost && !lostRef.current) {
+      lostRef.current = true;
+      setFeedback("wrong");
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(advanceQuestion, 1500);
+      return;
+    }
+
+    // Hint after 3 wrong guesses — reveal the next un-guessed letter for free
+    if (!won && !lost && wrongCount >= 3 && !hintTriggeredRef.current && hintFlashLetter == null) {
+      hintTriggeredRef.current = true;
+      const ordered = [...hangmanAnswer].filter((c) => /[a-z]/.test(c));
+      const hint = ordered.find((l) => !correctlyGuessed.has(l));
+      if (hint) setHintFlashLetter(hint);
+    }
+  }, [won, lost, wrongCount, hintFlashLetter, question?.idiom?.id, inReplay]);
+
+  // Hint flash → after the 800ms gold flash, add the letter to guessedLetters
+  useEffect(() => {
+    if (hintFlashLetter == null) return;
+    const t = setTimeout(() => {
+      setGuessedLetters((prev) => {
+        const next = new Set(prev);
+        next.add(hintFlashLetter);
+        return next;
+      });
+      setHintFlashLetter(null);
+    }, 800);
+    return () => clearTimeout(t);
+  }, [hintFlashLetter]);
 
   if (!question) return null;
 
@@ -625,8 +671,6 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     question.type === "name"    ? question.idiom.name :
     question.type === "meaning" ? question.idiom.meaning :
     null;
-
-  const showHint = question.type === "fill" && attempts >= 2 && !revealed && feedback !== "correct";
 
   return (
     <main className="az-fade-in" style={{
@@ -840,84 +884,167 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
         )}
 
         {question.type === "fill" && (
-          <div style={{ maxWidth: 380, margin: "0 auto" }}>
-            <input
-              ref={fillInputRef}
-              type="text"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={handleFillKey}
-              placeholder="Type the missing words…"
-              autoComplete="off"
-              disabled={feedback === "correct" || revealed}
-              style={{
-                width: "100%",
-                padding: "14px 16px",
-                borderRadius: 14,
-                border: feedback === "correct"
-                  ? "2px solid #16A34A"
-                  : feedback === "wrong"
-                    ? "2px solid #DC2626"
-                    : "2px solid var(--color-line)",
-                fontFamily: "inherit",
-                fontSize: 16,
-                outline: "none",
-                boxSizing: "border-box",
-                marginBottom: 10,
-                background: revealed ? "#F3F4F6" : "#fff",
-              }}
-            />
-            <button
-              onClick={handleSubmitFill}
-              disabled={!typed.trim() || feedback === "correct" || revealed}
-              className="az-tap"
-              style={{
-                width: "100%",
-                background: (!typed.trim() || feedback === "correct" || revealed)
-                  ? "#E5E7EB"
-                  : "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))",
-                color: (!typed.trim() || feedback === "correct" || revealed) ? "#9CA3AF" : "#fff",
-                border: "none",
-                padding: "13px",
-                borderRadius: 14,
-                fontFamily: "var(--font-display)",
-                fontWeight: 700,
-                fontSize: 16,
-                cursor: (!typed.trim() || feedback === "correct" || revealed) ? "default" : "pointer",
-                minHeight: 48,
-              }}
-            >Check ✓</button>
+          <div style={{ maxWidth: 460, margin: "0 auto" }}>
+            {/* Letter slots — grouped by word so wrapping respects word boundaries */}
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              justifyContent: "center",
+              gap: 14,
+              marginBottom: 14,
+            }}>
+              {hangmanAnswer.split(" ").map((word, wi) => (
+                <div key={wi} style={{ display: "flex", gap: 4 }}>
+                  {[...word].map((ch, ci) => {
+                    const lower = ch.toLowerCase();
+                    const isLetter = /[a-z]/.test(lower);
+                    if (!isLetter) {
+                      return (
+                        <span key={ci} style={{
+                          display: "inline-flex",
+                          alignItems: "flex-end",
+                          height: "clamp(32px, 9vw, 40px)",
+                          fontSize: "clamp(18px, 5.5vw, 24px)",
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 700,
+                          color: "var(--color-ink)",
+                        }}>{ch}</span>
+                      );
+                    }
+                    const revealed = correctlyGuessed.has(lower);
+                    const isLostReveal = lost && !revealed;
+                    const show = revealed || isLostReveal;
+                    return (
+                      <span key={ci} style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "clamp(24px, 7vw, 30px)",
+                        height: "clamp(32px, 9vw, 40px)",
+                        borderBottom: "3px solid var(--color-ink)",
+                        fontFamily: "var(--font-display)",
+                        fontSize: "clamp(18px, 5.5vw, 24px)",
+                        fontWeight: 700,
+                        color: isLostReveal ? "#DC2626" : "var(--color-ink)",
+                        transition: "color 220ms var(--ease-out)",
+                      }}>
+                        {show ? ch.toUpperCase() : ""}
+                      </span>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
 
-            {showHint && (
-              <div style={{
-                marginTop: 12,
-                padding: "8px 12px",
-                background: "#FFFBEB",
-                border: "1px solid #FDE68A",
-                borderRadius: 12,
-                color: "#92400E",
-                fontSize: 13,
-                fontWeight: 700,
-                textAlign: "center",
-              }}>
-                💡 Hint: <code style={{ fontFamily: "monospace", letterSpacing: 1 }}>{buildHint(question.primaryAnswer)}</code>
-              </div>
-            )}
-            {revealed && (
-              <div style={{
-                marginTop: 12,
-                padding: "10px 14px",
-                background: "#EFF6FF",
-                border: "1px solid #BFDBFE",
-                borderRadius: 12,
-                color: "var(--color-ink)",
-                fontSize: 14,
-                fontWeight: 700,
-                textAlign: "center",
-              }}>
-                Answer: <strong>{question.primaryAnswer}</strong>
-              </div>
-            )}
+            {/* Hangman SVG — gallows + body parts added per wrong guess */}
+            <div style={{
+              display: "flex",
+              justifyContent: "center",
+              marginBottom: 14,
+            }}>
+              <svg width="120" height="150" viewBox="0 0 120 150" aria-hidden="true">
+                {/* Gallows (always shown) */}
+                <line x1="8" y1="146" x2="92" y2="146" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="22" y1="146" x2="22" y2="8" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="22" y1="8" x2="78" y2="8" stroke="var(--color-ink)" strokeWidth="3" strokeLinecap="round"/>
+                <line x1="78" y1="8" x2="78" y2="24" stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                {/* Body parts */}
+                {wrongCount >= 1 && (
+                  <circle key="head" className="hangman-part" cx="78" cy="35" r="10"
+                          stroke="var(--color-ink)" strokeWidth="2.5" fill="none"/>
+                )}
+                {wrongCount >= 2 && (
+                  <line key="body" className="hangman-part" x1="78" y1="45" x2="78" y2="88"
+                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                )}
+                {wrongCount >= 3 && (
+                  <line key="larm" className="hangman-part" x1="78" y1="58" x2="62" y2="74"
+                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                )}
+                {wrongCount >= 4 && (
+                  <line key="rarm" className="hangman-part" x1="78" y1="58" x2="94" y2="74"
+                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                )}
+                {wrongCount >= 5 && (
+                  <line key="lleg" className="hangman-part" x1="78" y1="88" x2="62" y2="114"
+                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                )}
+                {wrongCount >= 6 && (
+                  <line key="rleg" className="hangman-part" x1="78" y1="88" x2="94" y2="114"
+                        stroke="var(--color-ink)" strokeWidth="2.5" strokeLinecap="round"/>
+                )}
+              </svg>
+            </div>
+
+            {/* QWERTY keyboard */}
+            <div style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 5,
+              alignItems: "center",
+            }}>
+              {[
+                ["Q","W","E","R","T","Y","U","I","O","P"],
+                ["A","S","D","F","G","H","J","K","L"],
+                ["Z","X","C","V","B","N","M"],
+              ].map((row, ri) => (
+                <div key={ri} style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                  {row.map((letter) => {
+                    const lower = letter.toLowerCase();
+                    const guessed = guessedLetters.has(lower);
+                    const isCorrect = hangmanAnswerLetters.has(lower);
+                    const flash = hintFlashLetter === lower;
+                    const disabled = guessed || won || lost || hintFlashLetter != null;
+
+                    let bg, color, borderColor;
+                    if (flash) {
+                      bg = "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))";
+                      color = "#fff";
+                      borderColor = "var(--color-sun-deep)";
+                    } else if (guessed && isCorrect) {
+                      bg = "linear-gradient(135deg, #22C55E, #16A34A)";
+                      color = "#fff";
+                      borderColor = "#16A34A";
+                    } else if (guessed && !isCorrect) {
+                      bg = "#9CA3AF";
+                      color = "#fff";
+                      borderColor = "#9CA3AF";
+                    } else {
+                      bg = "#fff";
+                      color = "var(--color-ink)";
+                      borderColor = "var(--color-line)";
+                    }
+
+                    return (
+                      <button
+                        key={letter}
+                        onClick={() => handleLetterTap(lower)}
+                        disabled={disabled}
+                        aria-label={`Letter ${letter}`}
+                        className={flash ? "hangman-hint-flash" : undefined}
+                        style={{
+                          width: "clamp(28px, 8.6vw, 36px)",
+                          height: "clamp(36px, 11vw, 44px)",
+                          padding: 0,
+                          borderRadius: 8,
+                          background: bg,
+                          color,
+                          border: `1px solid ${borderColor}`,
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 700,
+                          fontSize: "clamp(13px, 4vw, 16px)",
+                          cursor: disabled ? "default" : "pointer",
+                          opacity: (guessed && !isCorrect) ? 0.65 : 1,
+                          transition: "background 200ms var(--ease-out), color 200ms var(--ease-out), opacity 200ms var(--ease-out)",
+                          WebkitTapHighlightColor: "transparent",
+                          boxShadow: "var(--shadow-sm)",
+                        }}
+                      >{letter}</button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -937,7 +1064,9 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
           >
             {feedback === "correct"
               ? `✅ Correct — "${question.idiom.name}"`
-              : "❌ Try again!"}
+              : question.type === "fill" && lost
+                ? `The answer was: "${question.idiom.name}"`
+                : "❌ Try again!"}
           </div>
         )}
       </div>
