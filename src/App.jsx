@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Catch from "./Catch";
+import { supabase, supabaseConfigured } from "./supabase";
 
 const IDIOMS = [
   {
@@ -954,18 +955,10 @@ function QuizRound({ round, questions, onComplete }) {
   );
 }
 
-function Results({ name, scores, time, onNav, onSave }) {
+function Results({ name, scores, time, onNav }) {
   const total = scores[0] + scores[1] + scores[2];
   const max = 42;
   const pct = Math.round((total / max) * 100);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (!saved) {
-      onSave(name, total, time);
-      setSaved(true);
-    }
-  }, [saved, name, total, time, onSave]);
 
   let grade, gradeColor, gradeEmoji;
   if (pct === 100) { grade = "IDIOM MASTER"; gradeColor = "#D97706"; gradeEmoji = "👑"; }
@@ -1030,7 +1023,7 @@ function Results({ name, scores, time, onNav, onSave }) {
           padding: "14px", borderRadius: 12, border: "none", fontSize: 16, fontWeight: 700,
           background: "linear-gradient(135deg, #D97706, #B45309)", color: "#fff", cursor: "pointer",
         }}>
-          🏆 See Leaderboard
+          🏆 See Wall of Fame
         </button>
         <button onClick={() => onNav("quiz-name")} style={{
           padding: "14px", borderRadius: 12, border: "2px solid #E5E7EB",
@@ -1049,71 +1042,279 @@ function Results({ name, scores, time, onNav, onSave }) {
   );
 }
 
-function Leaderboard({ entries, onNav }) {
+// ─── Wall of Fame (shared leaderboard via Supabase, Phase 7) ──────────
+
+function relativeDate(iso) {
+  if (!iso) return "";
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return "";
+  const now = new Date();
+  const thenDay = new Date(then.getFullYear(), then.getMonth(), then.getDate()).getTime();
+  const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const diffDays = Math.round((nowDay - thenDay) / 86400000);
+  if (diffDays <= 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  if (diffDays < 7) return `${diffDays} days ago`;
+  return then.toLocaleDateString("en-GB", { month: "short", day: "numeric" });
+}
+
+const PODIUM_STYLES = [
+  { bg: "linear-gradient(135deg, #FEF3C7, #FCD34D)", border: "#F59E0B", text: "#92400E", glow: "0 10px 28px rgba(245, 158, 11, 0.45)" },
+  { bg: "linear-gradient(135deg, #F1F5F9, #CBD5E1)", border: "#94A3B8", text: "#1E293B", glow: "0 8px 22px rgba(148, 163, 184, 0.40)" },
+  { bg: "linear-gradient(135deg, #FED7AA, #FB923C)", border: "#C2410C", text: "#7C2D12", glow: "0 8px 22px rgba(194, 65, 12, 0.35)" },
+];
+const MEDALS = ["🥇", "🥈", "🥉"];
+
+function WallOfFame({ onNav }) {
+  const [status, setStatus] = useState("loading"); // 'loading'|'ok'|'error'|'unconfigured'
+  const [scores, setScores] = useState([]);
+
+  const fetchScores = useCallback(async () => {
+    setStatus("loading");
+    if (!supabaseConfigured) {
+      setStatus("unconfigured");
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from("scores")
+        .select("id, name, score, created_at")
+        .order("score", { ascending: false })
+        .order("created_at", { ascending: true })
+        .limit(50);
+      if (error) throw error;
+      setScores(data || []);
+      setStatus("ok");
+    } catch (e) {
+      console.error("Wall of Fame fetch failed", e);
+      setStatus("error");
+    }
+  }, []);
+
+  useEffect(() => { fetchScores(); }, [fetchScores]);
+
   return (
-    <div style={{ padding: "20px", maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ textAlign: "center", marginBottom: 24 }}>
-        <div style={{ fontSize: 48, marginBottom: 8 }}>🏆</div>
-        <h2 style={{ fontSize: 26, fontWeight: 800, color: "#1E3A5F", margin: 0 }}>Leaderboard</h2>
-        <p style={{ color: "#6B7280", fontSize: 13, marginTop: 4 }}>Top idiom masters</p>
+    <main className="az-fade-in" style={{ padding: "22px 16px 44px", maxWidth: 520, margin: "0 auto" }}>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: 10,
+        marginBottom: 20,
+      }}>
+        <h1 style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "clamp(26px, 7vw, 36px)",
+          color: "var(--color-ink)",
+          margin: 0,
+          letterSpacing: "0.3px",
+        }}>🏆 Wall of Fame</h1>
+        <button
+          onClick={fetchScores}
+          className="az-tap"
+          aria-label="Refresh scores"
+          disabled={status === "loading"}
+          style={{
+            width: 40, height: 40,
+            borderRadius: 14,
+            background: "#fff",
+            border: "1px solid var(--color-line)",
+            color: "var(--color-ink)",
+            fontSize: 20,
+            cursor: status === "loading" ? "default" : "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "var(--shadow-sm)",
+          }}
+        >↻</button>
       </div>
 
-      {entries.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "40px 20px", color: "#9CA3AF" }}>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>🦗</div>
-          <p>No scores yet. Be the first!</p>
-          <button onClick={() => onNav("quiz-name")} style={{
-            marginTop: 16, padding: "12px 28px", borderRadius: 12, border: "none",
-            background: "linear-gradient(135deg, #DC2626, #B91C1C)", color: "#fff",
-            fontSize: 16, fontWeight: 700, cursor: "pointer",
-          }}>
-            Take the Quiz
-          </button>
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {entries.slice(0, 20).map((e, i) => {
-            const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}.`;
-            const isTop3 = i < 3;
-            return (
-              <div key={i} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                background: isTop3 ? "#FFFBEB" : "#fff",
-                border: isTop3 ? "2px solid #FDE68A" : "1px solid #F3F4F6",
-                borderRadius: 14, padding: "12px 16px",
-              }}>
-                <div style={{ fontSize: isTop3 ? 28 : 16, minWidth: 36, textAlign: "center", fontWeight: 700, color: "#6B7280" }}>
-                  {medal}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, color: "#1E3A5F", fontSize: 15 }}>{e.name}</div>
-                  <div style={{ fontSize: 11, color: "#9CA3AF" }}>
-                    {new Date(e.date).toLocaleDateString()} • {formatTime(e.time)}
-                  </div>
-                </div>
-                <div style={{
-                  background: e.score === 42 ? "#FEF3C7" : "#EFF6FF",
-                  borderRadius: 10, padding: "6px 12px", textAlign: "center",
-                }}>
-                  <div style={{ fontWeight: 800, color: e.score === 42 ? "#D97706" : "#1E3A5F", fontSize: 18 }}>
-                    {e.score}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#9CA3AF" }}>/42</div>
-                </div>
-              </div>
-            );
-          })}
+      {status === "loading" && (
+        <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--color-muted)", fontWeight: 600 }}>
+          Loading…
         </div>
       )}
 
-      <button onClick={() => onNav("quiz-name")} style={{
-        width: "100%", marginTop: 20, padding: "14px", borderRadius: 12, border: "none",
-        background: "linear-gradient(135deg, #DC2626, #B91C1C)", color: "#fff",
-        fontSize: 16, fontWeight: 700, cursor: "pointer",
-      }}>
-        🧠 Take the Quiz
-      </button>
-    </div>
+      {status === "error" && (
+        <button
+          onClick={fetchScores}
+          className="az-tap"
+          style={{
+            display: "block", width: "100%",
+            padding: "20px",
+            background: "#FEF2F2",
+            border: "1px solid #FCA5A5",
+            borderRadius: 16,
+            color: "#B91C1C",
+            fontWeight: 700,
+            fontSize: 14,
+            cursor: "pointer",
+            textAlign: "center",
+            fontFamily: "inherit",
+          }}
+        >Couldn't load scores — tap to retry.</button>
+      )}
+
+      {status === "unconfigured" && (
+        <div style={{
+          textAlign: "center",
+          padding: "32px 20px",
+          background: "#FFFBEB",
+          border: "1px dashed #FDE68A",
+          borderRadius: 16,
+          color: "#92400E",
+          fontWeight: 600,
+        }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>🛠️</div>
+          Wall of Fame is being set up — check back soon!
+        </div>
+      )}
+
+      {status === "ok" && scores.length === 0 && (
+        <div style={{ textAlign: "center", padding: "40px 20px" }}>
+          <div style={{ fontSize: 64, marginBottom: 10 }} aria-hidden="true">🦗</div>
+          <p style={{ color: "var(--color-muted)", fontSize: 16, marginBottom: 18, fontWeight: 600 }}>
+            No scores yet — be the first! 🎮
+          </p>
+          <button
+            onClick={() => onNav("catch")}
+            className="az-tap"
+            style={{
+              background: "linear-gradient(135deg, #EF6F5C, #DC2626)",
+              color: "#fff",
+              border: "none",
+              padding: "14px 28px",
+              borderRadius: 18,
+              fontFamily: "var(--font-display)",
+              fontWeight: 700, fontSize: 17,
+              cursor: "pointer",
+              boxShadow: "var(--shadow-glow-coral)",
+            }}
+          >🎮 Play Catch</button>
+        </div>
+      )}
+
+      {status === "ok" && scores.length > 0 && (
+        <>
+          {/* Podium for top 3 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
+            {scores.slice(0, 3).map((entry, i) => {
+              const c = PODIUM_STYLES[i];
+              return (
+                <div
+                  key={entry.id}
+                  style={{
+                    background: c.bg,
+                    border: `3px solid ${c.border}`,
+                    borderRadius: 22,
+                    padding: i === 0 ? "18px 18px" : "14px 16px",
+                    display: "flex", alignItems: "center", gap: 14,
+                    boxShadow: c.glow,
+                  }}
+                >
+                  <span aria-hidden="true" style={{
+                    fontSize: i === 0 ? 46 : 36,
+                    lineHeight: 1,
+                    filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.15))",
+                  }}>{MEDALS[i]}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: i === 0 ? 22 : 18,
+                      fontWeight: 800,
+                      color: c.text,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>{entry.name}</div>
+                    <div style={{ fontSize: 11, color: c.text, opacity: 0.7, fontWeight: 600 }}>
+                      {relativeDate(entry.created_at)}
+                    </div>
+                  </div>
+                  <div style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: i === 0 ? 32 : 26,
+                    fontWeight: 800,
+                    color: c.text,
+                    lineHeight: 1,
+                  }}>{entry.score}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* List for #4 onward */}
+          {scores.length > 3 && (
+            <div style={{
+              background: "#fff",
+              borderRadius: 18,
+              overflow: "hidden",
+              boxShadow: "var(--shadow-sm)",
+              border: "1px solid var(--color-line)",
+            }}>
+              {scores.slice(3).map((entry, i) => {
+                const rank = i + 4;
+                const striped = i % 2 === 0;
+                return (
+                  <div
+                    key={entry.id}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 12,
+                      padding: "11px 14px",
+                      background: striped ? "#FBF7EE" : "#fff",
+                      borderTop: i > 0 ? "1px solid #F3F4F6" : "none",
+                    }}
+                  >
+                    <span style={{
+                      minWidth: 32, textAlign: "right",
+                      color: "var(--color-muted)",
+                      fontFamily: "var(--font-display)",
+                      fontSize: 14, fontWeight: 700,
+                    }}>{rank}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontFamily: "var(--font-display)",
+                        fontSize: 15, fontWeight: 700,
+                        color: "var(--color-ink)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}>{entry.name}</div>
+                      <div style={{ fontSize: 10.5, color: "var(--color-muted)", fontWeight: 600 }}>
+                        {relativeDate(entry.created_at)}
+                      </div>
+                    </div>
+                    <div style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: 18, fontWeight: 800,
+                      color: "var(--color-ink)",
+                    }}>{entry.score}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ marginTop: 18 }}>
+            <button
+              onClick={() => onNav("catch")}
+              className="az-tap"
+              style={{
+                width: "100%",
+                background: "linear-gradient(135deg, #EF6F5C, #DC2626)",
+                color: "#fff",
+                border: "none",
+                padding: "14px",
+                borderRadius: 16,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700, fontSize: 16,
+                cursor: "pointer",
+                boxShadow: "var(--shadow-glow-coral)",
+              }}
+            >🎮 Play Catch</button>
+          </div>
+        </>
+      )}
+    </main>
   );
 }
 
@@ -1484,7 +1685,6 @@ export default function App() {
   const [quizScores, setQuizScores] = useState([0, 0, 0]);
   const [quizStartTime, setQuizStartTime] = useState(null);
   const [quizTime, setQuizTime] = useState(0);
-  const [leaderboard, setLeaderboard] = useState([]);
   const [quizQuestions, setQuizQuestions] = useState({ r1: [], r2: [], r3: [] });
   const [muted, setMuted] = useState(isMuted());
   const [selectedIdiomId, setSelectedIdiomId] = useState(null);
@@ -1559,29 +1759,6 @@ export default function App() {
       return next;
     });
   }, []);
-
-  // Load leaderboard
-  useEffect(() => {
-    (async () => {
-      try {
-        const result = await window.storage.get("az-idioms-leaderboard", true);
-        if (result && result.value) setLeaderboard(JSON.parse(result.value));
-      } catch (e) {
-        console.log("No leaderboard yet");
-      }
-    })();
-  }, []);
-
-  const saveScore = useCallback(async (name, score, time) => {
-    const entry = { name, score, time, date: new Date().toISOString() };
-    const updated = [...leaderboard, entry].sort((a, b) => b.score - a.score || a.time - b.time).slice(0, 50);
-    setLeaderboard(updated);
-    try {
-      await window.storage.set("az-idioms-leaderboard", JSON.stringify(updated), true);
-    } catch (e) {
-      console.error("Failed to save leaderboard", e);
-    }
-  }, [leaderboard]);
 
   const generateQuiz = () => {
     const shuffled = shuffle(IDIOMS);
@@ -1679,16 +1856,16 @@ export default function App() {
           scores={quizScores}
           time={quizTime}
           onNav={handleNav}
-          onSave={saveScore}
         />
       )}
-      {page === "leaderboard" && <Leaderboard entries={leaderboard} onNav={handleNav} />}
+      {page === "leaderboard" && <WallOfFame onNav={handleNav} />}
       {page === "catch" && (
         <Catch
           cutouts={cutouts}
           idioms={IDIOMS}
           speak={speak}
           onBack={() => handleNav("landing")}
+          onViewFame={() => handleNav("leaderboard")}
         />
       )}
 

@@ -1,4 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { supabase, supabaseConfigured } from "./supabase";
+
+const PLAYER_NAME_KEY = "azidioms_player_name";
+function loadPlayerName() {
+  try { return localStorage.getItem(PLAYER_NAME_KEY) || ""; } catch (_) { return ""; }
+}
+function savePlayerName(n) {
+  try { localStorage.setItem(PLAYER_NAME_KEY, n); } catch (_) { /* ignore */ }
+}
 
 // ─── Constants ──────────────────────────
 const HIGHSCORE_KEY = "azidioms_catch_highscore";
@@ -183,12 +192,49 @@ function StartScreen({ highScore, onStart, onBack, ready }) {
 }
 
 // ─── End screen ──────────────────────────
-function EndScreen({ score, highScore, newHigh, onPlay, onBack }) {
+function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
   let message, emoji;
   if (newHigh) { message = "Amazing!"; emoji = "🏆"; }
   else if (score >= 250) { message = "Great job!"; emoji = "🌟"; }
   else if (score >= 100) { message = "Nice catching!"; emoji = "💪"; }
   else { message = "Keep practising!"; emoji = "🌱"; }
+
+  const [name, setName] = useState(loadPlayerName);
+  const [postState, setPostState] = useState("idle"); // 'idle'|'posting'|'posted'|'error'
+  const nameInputRef = useRef(null);
+
+  // Auto-focus the name input on mount so kids can start typing right away.
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+    const t = setTimeout(() => {
+      if (nameInputRef.current) nameInputRef.current.focus();
+    }, 250); // wait for entrance animation to settle
+    return () => clearTimeout(t);
+  }, []);
+
+  const trimmed = name.trim();
+  const canPost = supabaseConfigured && trimmed.length >= 2 && postState !== "posting" && postState !== "posted";
+
+  const handlePost = async () => {
+    if (!canPost) return;
+    setPostState("posting");
+    try {
+      const cleanName = trimmed.slice(0, 20);
+      const { error } = await supabase
+        .from("scores")
+        .insert({ name: cleanName, score });
+      if (error) throw error;
+      savePlayerName(cleanName);
+      setPostState("posted");
+    } catch (e) {
+      console.error("Post score failed", e);
+      setPostState("error");
+    }
+  };
+
+  const handleNameKey = (e) => {
+    if (e.key === "Enter" && canPost) handlePost();
+  };
 
   return (
     <main
@@ -259,8 +305,125 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack }) {
         )}
       </div>
 
+      {supabaseConfigured && (
+        <div style={{
+          marginTop: 18,
+          width: "100%",
+          maxWidth: 380,
+          background: "#fff",
+          borderRadius: 18,
+          padding: "16px 16px 18px",
+          boxShadow: "var(--shadow-sm)",
+          textAlign: "left",
+        }}>
+          <div style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 11,
+            fontWeight: 800,
+            color: "var(--color-muted)",
+            textTransform: "uppercase",
+            letterSpacing: 1.2,
+            marginBottom: 10,
+            textAlign: "center",
+          }}>
+            Share your score
+          </div>
+
+          {postState !== "posted" ? (
+            <>
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={handleNameKey}
+                placeholder="Your name"
+                maxLength={20}
+                autoComplete="off"
+                disabled={postState === "posting"}
+                style={{
+                  width: "100%",
+                  padding: "12px 14px",
+                  borderRadius: 12,
+                  border: "2px solid var(--color-line)",
+                  fontFamily: "inherit",
+                  fontSize: 16,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  marginBottom: 10,
+                  background: postState === "posting" ? "#F3F4F6" : "#fff",
+                }}
+                onFocus={(e) => { e.target.style.borderColor = "var(--color-sun)"; }}
+                onBlur={(e) => { e.target.style.borderColor = "var(--color-line)"; }}
+              />
+              <button
+                onClick={handlePost}
+                disabled={!canPost}
+                className="az-tap"
+                style={{
+                  width: "100%",
+                  background: canPost
+                    ? "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))"
+                    : "#E5E7EB",
+                  color: canPost ? "#fff" : "#9CA3AF",
+                  border: "none",
+                  padding: "13px",
+                  borderRadius: 14,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  cursor: canPost ? "pointer" : "default",
+                  boxShadow: canPost ? "var(--shadow-glow-sun)" : "none",
+                  minHeight: 48,
+                }}
+              >
+                {postState === "posting" ? "Posting…" : "🏆 Post Score"}
+              </button>
+              {postState === "error" && (
+                <div style={{
+                  marginTop: 10, color: "#B91C1C", fontSize: 12.5,
+                  fontWeight: 700, textAlign: "center",
+                }}>
+                  Couldn't post — try again
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div style={{
+                width: "100%",
+                padding: "13px",
+                borderRadius: 14,
+                background: "linear-gradient(135deg, #16A34A, #15803D)",
+                color: "#fff",
+                fontFamily: "var(--font-display)",
+                fontWeight: 800,
+                fontSize: 16,
+                textAlign: "center",
+                marginBottom: 10,
+              }}>✅ Posted!</div>
+              <button
+                onClick={onViewFame}
+                className="az-tap"
+                style={{
+                  width: "100%",
+                  background: "transparent",
+                  color: "var(--color-ink)",
+                  border: "2px solid var(--color-line)",
+                  padding: "11px",
+                  borderRadius: 12,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700, fontSize: 14,
+                  cursor: "pointer",
+                }}
+              >🏆 View Wall of Fame →</button>
+            </>
+          )}
+        </div>
+      )}
+
       <div style={{
-        marginTop: 22,
+        marginTop: 18,
         display: "flex", flexDirection: "column", gap: 12,
         width: "100%",
         maxWidth: 320,
@@ -302,7 +465,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack }) {
 }
 
 // ─── Main game component ────────────────
-export default function Catch({ cutouts, idioms, speak, onBack }) {
+export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
   const [phase, setPhase] = useState("start"); // 'start' | 'playing' | 'over'
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(1);
@@ -607,6 +770,7 @@ export default function Catch({ cutouts, idioms, speak, onBack }) {
         newHigh={newHigh}
         onPlay={startGame}
         onBack={onBack}
+        onViewFame={onViewFame}
       />
     );
   }
