@@ -522,7 +522,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
 
   // Image pick handler (Easy / Medium / Boss name+meaning)
   const handlePickImage = (idiom) => {
-    if (feedback === "correct" || revealed) return;
+    if (feedback === "correct") return;
     setPickedId(idiom.id);
     const isCorrect = idiom.id === question.idiom.id;
     if (isCorrect) {

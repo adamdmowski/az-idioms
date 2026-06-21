@@ -270,6 +270,9 @@ function shuffle(arr) {
 function readMuted() {
   try { return localStorage.getItem("az-idioms-muted") === "1"; } catch (_) { return false; }
 }
+function readMusicOff() {
+  try { return localStorage.getItem("azidioms_music_off") === "1"; } catch (_) { return false; }
+}
 
 function formatTime(ms) {
   const s = Math.floor(ms / 1000);
@@ -1344,6 +1347,7 @@ export default function App() {
     return window.location.pathname === "/catch" ? "catch" : "landing";
   });
   const [muted, setMuted] = useState(readMuted);
+  const [musicOff, setMusicOff] = useState(readMusicOff);
   const [selectedIdiomId, setSelectedIdiomId] = useState(null);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
   const [cutouts, setCutouts] = useState([]);
@@ -1425,9 +1429,11 @@ export default function App() {
   // Keep refs in sync so the one-time interaction listener reads current state.
   const pageRef = useRef(page);
   const mutedRef = useRef(muted);
+  const musicOffRef = useRef(musicOff);
   const learningOpenRef = useRef(learningIdiomId != null);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
+  useEffect(() => { musicOffRef.current = musicOff; }, [musicOff]);
   useEffect(() => { learningOpenRef.current = learningIdiomId != null; }, [learningIdiomId]);
 
   const fadeMusicTo = useCallback((target, duration) => {
@@ -1452,7 +1458,9 @@ export default function App() {
   const applyMusicState = useCallback(() => {
     const audio = musicRef.current;
     if (!audio) return;
-    if (mutedRef.current || pageRef.current !== "landing") {
+    // Main mute and the dedicated music toggle both pause; music toggle is
+    // independent of TTS/beeps. Page must also be the landing page.
+    if (mutedRef.current || musicOffRef.current || pageRef.current !== "landing") {
       audio.pause();
       return;
     }
@@ -1461,7 +1469,8 @@ export default function App() {
     fadeMusicTo(target, 500);
   }, [fadeMusicTo]);
 
-  // Start the music on the first user interaction with the page (autoplay rules).
+  // Try to start music immediately on load. If the browser blocks autoplay,
+  // fall back to starting on the first user interaction.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const startMusic = () => {
@@ -1477,8 +1486,21 @@ export default function App() {
         console.error("Music init failed", e);
       }
     };
+    // Optimistic attempt — many desktop browsers will allow it; mobile usually won't.
+    startMusic();
+
+    // Fallback: if the optimistic play was rejected (audio is paused), the
+    // first user gesture re-applies state which calls audio.play() within
+    // the gesture context — that always works.
     const handler = () => {
-      startMusic();
+      const audio = musicRef.current;
+      if (!audio || audio.paused) {
+        if (!musicStartedRef.current) {
+          startMusic();
+        } else {
+          applyMusicState();
+        }
+      }
       window.removeEventListener("pointerdown", handler);
       window.removeEventListener("touchstart", handler);
       window.removeEventListener("keydown", handler);
@@ -1493,8 +1515,16 @@ export default function App() {
     };
   }, [applyMusicState]);
 
-  // React to page / mute / modal changes: play, pause, or fade the music.
-  useEffect(() => { applyMusicState(); }, [page, muted, learningIdiomId, applyMusicState]);
+  // React to page / mute / music-toggle / modal changes: play, pause, or fade.
+  useEffect(() => { applyMusicState(); }, [page, muted, musicOff, learningIdiomId, applyMusicState]);
+
+  const toggleMusic = useCallback(() => {
+    setMusicOff((m) => {
+      const next = !m;
+      try { localStorage.setItem("azidioms_music_off", next ? "1" : "0"); } catch (_) { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   const handleNav = (p) => {
     // Header/CTA nav always starts Learn at idiom 1; only zone-taps preserve selection.
@@ -1507,6 +1537,38 @@ export default function App() {
       minHeight: "100dvh",
       background: "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
     }}>
+      {/* Floating music toggle — sits to the left of the mute button.
+          Independently controls the background music. */}
+      <button
+        onClick={toggleMusic}
+        aria-label={musicOff ? "Turn music on" : "Turn music off"}
+        aria-pressed={musicOff}
+        title={musicOff ? "Music off — tap to enable" : "Music on — tap to mute"}
+        className="az-tap"
+        style={{
+          position: "fixed",
+          top: "max(15px, calc(env(safe-area-inset-top) + 3px))",
+          right: "max(62px, calc(env(safe-area-inset-right) + 50px))",
+          width: 36, height: 36,
+          borderRadius: "50%",
+          background: musicOff ? "rgba(148, 163, 184, 0.30)" : "rgba(255, 255, 255, 0.10)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid rgba(255, 255, 255, 0.18)",
+          color: "#fff",
+          fontSize: 14,
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(0, 0, 0, 0.45)",
+          zIndex: 40,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          WebkitTapHighlightColor: "transparent",
+          opacity: musicOff ? 0.65 : 1,
+          textDecoration: musicOff ? "line-through" : "none",
+        }}
+      >
+        <span aria-hidden="true">🎵</span>
+      </button>
+
       {/* Floating mute toggle — always accessible, hidden by Catch's playing-phase
           overlay (z-index 60) and the LearningWindow modal (z-index 100). */}
       <button
