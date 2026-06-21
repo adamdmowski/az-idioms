@@ -316,7 +316,7 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick }) {
           >
             {cutout ? (
               <img
-                src={`/cutouts/${cutout.file}`}
+                src={`/characters/${cutout.file}`}
                 alt=""
                 draggable={false}
                 style={{

@@ -890,7 +890,7 @@ export default function Catch({ cutouts, idioms, speak, onBack, onViewFame }) {
               }}>
                 {cutout ? (
                   <img
-                    src={`/cutouts/${cutout.file}`}
+                    src={`/characters/${cutout.file}`}
                     alt=""
                     draggable={false}
                     style={{
