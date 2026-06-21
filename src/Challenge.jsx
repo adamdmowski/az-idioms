@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
-import { playForIdiom, cancelAudio, speakText } from "./audio";
+import { playForIdiom, cancelAudio } from "./audio";
 import { validatePost } from "./validation";
 
 const POST_COOLDOWN_MS = 30_000;
@@ -486,7 +486,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     if (level === "easy" && question.type === "name") {
       playForIdiom(question.idiom, "name");
     } else if (level === "medium" && question.type === "meaning") {
-      speakText(question.idiom.meaning);
+      playForIdiom(question.idiom, "meaning");
     }
   }, [questionIdx, question?.type, question?.idiom?.id, level]);
 
@@ -773,7 +773,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                 <button
                   onClick={() => {
                     if (question.type === "name") playForIdiom(question.idiom, "name");
-                    else speakText(question.idiom.meaning);
+                    else playForIdiom(question.idiom, "meaning");
                   }}
                   aria-label="Replay prompt"
                   className="az-tap"

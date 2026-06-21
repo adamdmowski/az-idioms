@@ -1,6 +1,6 @@
-// One-time TTS generation: synthesises 28 MP3s (14 idiom names + 14 examples)
-// via Google Cloud Text-to-Speech (Chirp3-HD-Iapetus, en-GB, speakingRate 0.9)
-// and saves them to public/audio/.
+// One-time TTS generation: synthesises 42 MP3s (14 idiom names + 14 examples
+// + 14 meanings) via Google Cloud Text-to-Speech (Chirp3-HD-Iapetus, en-GB,
+// speakingRate 0.9) and saves them to public/audio/.
 //
 // Usage:  npm run generate-audio
 // Requires GOOGLE_TTS_API_KEY in .env (loaded via dotenv) or process env.
@@ -66,6 +66,23 @@ const EXAMPLES = [
   "The homework was a piece of cake.",
 ];
 
+const MEANINGS = [
+  "It's raining very hard.",
+  "Something that will never happen.",
+  "Extremely happy.",
+  "Wait a moment. Slow down. Be patient.",
+  "Making a big fuss about something small.",
+  "To stop a habit suddenly and completely.",
+  "A big, obvious problem everyone avoids talking about.",
+  "Very calm and relaxed, even in a hard situation.",
+  "To accidentally reveal a secret — you didn't mean to tell.",
+  "To reveal a secret, on purpose or by accident.",
+  "Said to someone who is quiet and won't speak.",
+  "Good luck! Especially before a performance.",
+  "To suddenly feel too nervous or scared to do something you planned.",
+  "Something very easy to do.",
+];
+
 // `input` may be a plain string OR { ssml } / { text }
 async function synthesize(input) {
   const inputBody =
@@ -104,7 +121,7 @@ function kb(n) {
 
 async function main() {
   await fs.mkdir(OUT_DIR, { recursive: true });
-  console.log(`Generating 28 audio files to ${OUT_DIR}`);
+  console.log(`Generating 42 audio files to ${OUT_DIR}`);
   console.log(`Voice: ${VOICE.name} @ ${AUDIO_CONFIG.speakingRate}x\n`);
 
   let total = 0;
@@ -117,6 +134,11 @@ async function main() {
     ...EXAMPLES.map((input, i) => ({
       kind: "example",
       file: `example_${String(i + 1).padStart(2, "0")}.mp3`,
+      input,
+    })),
+    ...MEANINGS.map((input, i) => ({
+      kind: "meaning",
+      file: `meaning_${String(i + 1).padStart(2, "0")}.mp3`,
       input,
     })),
   ];

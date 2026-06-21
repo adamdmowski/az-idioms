@@ -41,6 +41,7 @@ export function playAudio(filename) {
 // Convenience wrapper: derive filename from an idiom's id and the kind we want.
 //   playForIdiom(idiom)            → name_NN.mp3
 //   playForIdiom(idiom, "example") → example_NN.mp3
+//   playForIdiom(idiom, "meaning") → meaning_NN.mp3
 export function playForIdiom(idiom, kind = "name") {
   if (!idiom || idiom.id == null) return;
   const num = String(idiom.id).padStart(2, "0");
