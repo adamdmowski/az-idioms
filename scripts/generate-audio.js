@@ -56,7 +56,7 @@ const EXAMPLES = [
   "Hold your horses — let me finish first!",
   "They argued about the seats, but it was just a storm in a teacup.",
   "He quit eating sweets — he went cold turkey.",
-  "Nobody talked about the broken window — it was the elephant in the room.",
+  "Everyone knew he failed the exam, but nobody mentioned it — it was the elephant in the room.",
   "During the test she stayed cool as a cucumber.",
   "Don't spill the beans about the surprise party!",
   "He let the cat out of the bag about the new puppy.",
