@@ -1093,13 +1093,11 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   }, []);
 
   // Autoplay: play the idiom name on open and on every idiom change.
-  // Wait ~320ms first so the background-music fade-down (300ms in applyMusicState)
-  // completes before the voice speaks. Otherwise the music drowns out the idiom
-  // for the first beat on mobile.
+  // Short 100ms gap lets the music's hard-pause settle before the voice starts.
   // The cleanup cancels both the pending timer and any in-flight playback, so
   // prev/next/swipe never queue or overlap.
   useEffect(() => {
-    const t = setTimeout(() => { playForIdiom(current, "name"); }, 320);
+    const t = setTimeout(() => { playForIdiom(current, "name"); }, 100);
     return () => {
       clearTimeout(t);
       cancelAudio();
@@ -1519,18 +1517,18 @@ export default function App() {
     const page = pageRef.current;
     const learningOpen = learningOpenRef.current;
     if (!audio) return;
-    // Main mute and the dedicated music toggle both pause; music toggle is
-    // independent of TTS/beeps. Page must also be the landing page.
-    if (muted || musicOff || page !== "landing") {
+    // Pause whenever music can't / shouldn't be heard:
+    //   - main mute or dedicated music toggle off
+    //   - not on the landing page (Catch/Quiz/Fame all silence music)
+    //   - a learning window is open (iOS Safari ignores volume changes on
+    //     <audio>, so we hard-pause instead of fading down)
+    if (muted || musicOff || page !== "landing" || learningOpen) {
       audio.pause();
       return;
     }
+    audio.volume = 0.3;
     try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
-    const target = learningOpen ? 0.08 : 0.3;
-    // 300ms fade matches the delay before the idiom audio starts speaking,
-    // so the music is at low volume before the voice begins.
-    fadeMusicTo(target, 300);
-  }, [fadeMusicTo]);
+  }, []);
 
   // Try to start music immediately on load. If the browser blocks autoplay,
   // fall back to starting on the first user interaction.
@@ -1582,17 +1580,11 @@ export default function App() {
         // Synchronous play() inside the gesture — this is the key bit.
         const p = audio.play();
         if (p && typeof p.catch === "function") p.catch(() => {});
-        // If a learning window is already open at the moment of the gesture
-        // (rare — e.g. modal mounts before this listener fires), skip the
-        // up-fade and pin the start volume to the modal-open level.
-        if (learningOpenRef.current) {
-          audio.volume = 0.08;
-        }
       }
       // Wait long enough that any tap-on-character flow (handleZoneTap defers
       // setLearningIdiomId by ~220ms) has propagated before we settle the
-      // volume — otherwise the music briefly fades up to 0.3 before dropping
-      // to 0.08 when the modal opens.
+      // state — otherwise the music briefly plays before getting paused when
+      // the modal opens.
       setTimeout(() => applyMusicState(), 300);
 
       window.removeEventListener("pointerdown", handler);
