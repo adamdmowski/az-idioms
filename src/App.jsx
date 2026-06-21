@@ -482,7 +482,7 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
         }}
       >
         <img
-          src="/idioms.png"
+          src="/idioms.webp"
           alt="A cartoon scene where 14 English idioms are hidden among characters and objects."
           draggable={false}
           style={{
@@ -1609,6 +1609,11 @@ function LearningWindow({ initialId, cutouts, onClose }) {
               }}
             >🔊</button>
           </LearningSection>
+          {current.funFact && (
+            <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
+              {current.funFact}
+            </LearningSection>
+          )}
 
           {/* Prev / position / Next */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

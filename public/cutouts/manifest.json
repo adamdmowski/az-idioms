@@ -1,7 +1,7 @@
 {
   "01_raining_cats_dogs": {
     "idiom": "It's raining cats and dogs",
-    "file": "01_raining_cats_dogs.png",
+    "file": "01_raining_cats_dogs.webp",
     "xPercent": 17.12,
     "yPercent": 0.48,
     "wPercent": 48.03,
@@ -9,7 +9,7 @@
   },
   "02_when_pigs_fly": {
     "idiom": "When pigs fly",
-    "file": "02_when_pigs_fly.png",
+    "file": "02_when_pigs_fly.webp",
     "xPercent": 20.92,
     "yPercent": 25.06,
     "wPercent": 45.65,
@@ -17,15 +17,15 @@
   },
   "03_on_cloud_nine": {
     "idiom": "On cloud nine",
-    "file": "03_on_cloud_nine.png",
+    "file": "03_on_cloud_nine.webp",
     "xPercent": 65.53,
     "yPercent": 7.61,
     "wPercent": 25.06,
-    "hPercent": 32.0
+    "hPercent": 32
   },
   "04_hold_your_horses": {
     "idiom": "Hold your horses",
-    "file": "04_hold_your_horses.png",
+    "file": "04_hold_your_horses.webp",
     "xPercent": 3.8,
     "yPercent": 46.27,
     "wPercent": 32.33,
@@ -33,7 +33,7 @@
   },
   "05_storm_teacup": {
     "idiom": "A storm in a teacup",
-    "file": "05_storm_teacup.png",
+    "file": "05_storm_teacup.webp",
     "xPercent": 26.63,
     "yPercent": 69.4,
     "wPercent": 11.41,
@@ -41,7 +41,7 @@
   },
   "06_cold_turkey": {
     "idiom": "Cold turkey",
-    "file": "06_cold_turkey.png",
+    "file": "06_cold_turkey.webp",
     "xPercent": 13.31,
     "yPercent": 69.4,
     "wPercent": 15.22,
@@ -49,7 +49,7 @@
   },
   "07_elephant_room": {
     "idiom": "The elephant in the room",
-    "file": "07_elephant_room.png",
+    "file": "07_elephant_room.webp",
     "xPercent": 34.24,
     "yPercent": 34.7,
     "wPercent": 32.33,
@@ -57,7 +57,7 @@
   },
   "08_cool_cucumber": {
     "idiom": "Cool as a cucumber",
-    "file": "08_cool_cucumber.png",
+    "file": "08_cool_cucumber.webp",
     "xPercent": 57.06,
     "yPercent": 48.19,
     "wPercent": 7.61,
@@ -65,7 +65,7 @@
   },
   "09_spill_beans": {
     "idiom": "Spill the beans",
-    "file": "09_spill_beans.png",
+    "file": "09_spill_beans.webp",
     "xPercent": 36.14,
     "yPercent": 67.47,
     "wPercent": 19.02,
@@ -73,7 +73,7 @@
   },
   "10_cat_out_of_bag": {
     "idiom": "Let the cat out of the bag",
-    "file": "10_cat_out_of_bag.png",
+    "file": "10_cat_out_of_bag.webp",
     "xPercent": 55.16,
     "yPercent": 69.4,
     "wPercent": 11.41,
@@ -81,7 +81,7 @@
   },
   "11_cat_got_tongue": {
     "idiom": "Cat got your tongue?",
-    "file": "11_cat_got_tongue.png",
+    "file": "11_cat_got_tongue.webp",
     "xPercent": 60.87,
     "yPercent": 69.4,
     "wPercent": 20.92,
@@ -89,7 +89,7 @@
   },
   "12_break_a_leg": {
     "idiom": "Break a leg",
-    "file": "12_break_a_leg.png",
+    "file": "12_break_a_leg.webp",
     "xPercent": 81.79,
     "yPercent": 34.7,
     "wPercent": 17.12,
@@ -97,7 +97,7 @@
   },
   "13_cold_feet": {
     "idiom": "Cold feet",
-    "file": "13_cold_feet.png",
+    "file": "13_cold_feet.webp",
     "xPercent": 67.19,
     "yPercent": 44.24,
     "wPercent": 15.17,
@@ -105,7 +105,7 @@
   },
   "14_piece_of_cake": {
     "idiom": "Piece of cake",
-    "file": "14_piece_of_cake.png",
+    "file": "14_piece_of_cake.webp",
     "xPercent": 76.08,
     "yPercent": 63.61,
     "wPercent": 20.92,
