@@ -1503,15 +1503,22 @@ export default function App() {
 
   const applyMusicState = useCallback(() => {
     const audio = musicRef.current;
+    const muted = mutedRef.current;
+    const musicOff = musicOffRef.current;
+    const page = pageRef.current;
+    const learningOpen = learningOpenRef.current;
+    console.log(
+      `Music: applyMusicState muted=${muted} musicOff=${musicOff} page=${page} learningOpen=${learningOpen} hasAudio=${!!audio}`
+    );
     if (!audio) return;
     // Main mute and the dedicated music toggle both pause; music toggle is
     // independent of TTS/beeps. Page must also be the landing page.
-    if (mutedRef.current || musicOffRef.current || pageRef.current !== "landing") {
+    if (muted || musicOff || page !== "landing") {
       audio.pause();
       return;
     }
     try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
-    const target = learningOpenRef.current ? 0.08 : 0.3;
+    const target = learningOpen ? 0.08 : 0.3;
     // 300ms fade matches the delay before the idiom audio starts speaking,
     // so the music is at low volume before the voice begins.
     fadeMusicTo(target, 300);
@@ -1521,7 +1528,11 @@ export default function App() {
   // fall back to starting on the first user interaction.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const startMusic = () => {
+
+    // Only creates the Audio element + stores the ref. Does NOT call play()
+    // or applyMusicState. That way both the optimistic and the fallback paths
+    // can decide for themselves whether/how to trigger play.
+    const ensureAudio = () => {
       if (musicStartedRef.current) return;
       musicStartedRef.current = true;
       try {
@@ -1529,33 +1540,55 @@ export default function App() {
         a.loop = true;
         a.volume = 0;
         musicRef.current = a;
-        applyMusicState();
       } catch (e) {
         console.error("Music init failed", e);
       }
     };
-    // Optimistic attempt — many desktop browsers will allow it; mobile usually won't.
-    startMusic();
 
-    // Fallback: if the optimistic play was rejected (audio is paused), the
-    // first user gesture re-applies state which calls audio.play() within
-    // the gesture context — that always works.
-    const handler = () => {
-      const audio = musicRef.current;
-      if (!audio || audio.paused) {
-        if (!musicStartedRef.current) {
-          startMusic();
-        } else {
+    // Optimistic attempt — desktop browsers usually allow it; mobile usually won't.
+    console.log("Music: autoplay attempt");
+    ensureAudio();
+    const initialAudio = musicRef.current;
+    if (initialAudio) {
+      const p = initialAudio.play();
+      if (p && typeof p.then === "function") {
+        p.then(() => {
+          console.log("Music: autoplay succeeded");
           applyMusicState();
+        }).catch(() => {
+          console.log("Music: autoplay blocked, waiting for user gesture");
+        });
+      }
+    }
+
+    // Fallback: on the first user gesture, start the music UNCONDITIONALLY
+    // and synchronously inside the gesture handler (mobile browsers require
+    // play() to be a direct child of the gesture call stack). Then schedule
+    // applyMusicState() shortly after to apply mute/page/modal volume rules.
+    const handler = () => {
+      console.log("Music: fallback listener fired");
+      ensureAudio();
+      const audio = musicRef.current;
+      if (audio) {
+        // Synchronous play() inside the gesture — this is the key bit.
+        const p = audio.play();
+        if (p && typeof p.then === "function") {
+          p.then(() => console.log("Music: gesture play succeeded"))
+           .catch((err) => console.log("Music: gesture play rejected", err && err.message));
         }
       }
+      // Adjust volume / mute / page state on the next tick so any pause-or-fade
+      // happens AFTER the audio element has been activated by the gesture.
+      setTimeout(() => applyMusicState(), 50);
+
       window.removeEventListener("pointerdown", handler);
       window.removeEventListener("touchstart", handler);
       window.removeEventListener("keydown", handler);
     };
-    window.addEventListener("pointerdown", handler, { once: true });
-    window.addEventListener("touchstart", handler, { once: true });
-    window.addEventListener("keydown", handler, { once: true });
+    window.addEventListener("pointerdown", handler);
+    window.addEventListener("touchstart", handler);
+    window.addEventListener("keydown", handler);
+
     return () => {
       window.removeEventListener("pointerdown", handler);
       window.removeEventListener("touchstart", handler);
