@@ -1081,11 +1081,18 @@ function LearningWindow({ initialId, cutouts, onClose }) {
     return () => { document.body.style.overflow = prev; };
   }, []);
 
-  // Autoplay: play the idiom name on open and on every idiom change. Cleanup
-  // cancels any in-flight playback so prev/next/swipe never queue or overlap.
+  // Autoplay: play the idiom name on open and on every idiom change.
+  // Wait ~320ms first so the background-music fade-down (300ms in applyMusicState)
+  // completes before the voice speaks. Otherwise the music drowns out the idiom
+  // for the first beat on mobile.
+  // The cleanup cancels both the pending timer and any in-flight playback, so
+  // prev/next/swipe never queue or overlap.
   useEffect(() => {
-    playForIdiom(current, "name");
-    return () => { cancelAudio(); };
+    const t = setTimeout(() => { playForIdiom(current, "name"); }, 320);
+    return () => {
+      clearTimeout(t);
+      cancelAudio();
+    };
   }, [current.id]);
 
   // Swipe handling (horizontal only; ignore vertical scroll gestures)
@@ -1240,7 +1247,9 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             </p>
           )}
 
-          {/* Character image card */}
+          {/* Character image card — container adapts to image (no aspect-ratio
+              or maxHeight constraint that would crop). object-fit: contain
+              guarantees the full character is visible. */}
           <div style={{
             background: "linear-gradient(135deg, var(--color-card), var(--color-card-soft))",
             borderRadius: 20,
@@ -1251,7 +1260,6 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             alignItems: "center",
             justifyContent: "center",
             minHeight: 180,
-            aspectRatio: "16 / 11",
             overflow: "hidden",
           }}>
             {cutout ? (
@@ -1260,9 +1268,13 @@ function LearningWindow({ initialId, cutouts, onClose }) {
                 alt={current.name}
                 draggable={false}
                 style={{
-                  maxWidth: "92%",
-                  maxHeight: "92%",
+                  display: "block",
+                  width: "auto",
+                  height: "auto",
+                  maxWidth: "100%",
+                  maxHeight: "clamp(240px, 70vw, 320px)",
                   objectFit: "contain",
+                  margin: "0 auto",
                   filter: "drop-shadow(0 8px 14px rgba(0,0,0,0.18))",
                   animation: "az-pop-in 420ms var(--ease-spring) both",
                   userSelect: "none",
@@ -1466,7 +1478,9 @@ export default function App() {
     }
     try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
     const target = learningOpenRef.current ? 0.08 : 0.3;
-    fadeMusicTo(target, 500);
+    // 300ms fade matches the delay before the idiom audio starts speaking,
+    // so the music is at low volume before the voice begins.
+    fadeMusicTo(target, 300);
   }, [fadeMusicTo]);
 
   // Try to start music immediately on load. If the browser blocks autoplay,
@@ -1517,6 +1531,23 @@ export default function App() {
 
   // React to page / mute / music-toggle / modal changes: play, pause, or fade.
   useEffect(() => { applyMusicState(); }, [page, muted, musicOff, learningIdiomId, applyMusicState]);
+
+  // Pause music when the tab/app is hidden (minimised, phone locked, app
+  // switched away). Resume when it comes back — applyMusicState re-checks
+  // mute / music-toggle / page so nothing leaks through.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        const audio = musicRef.current;
+        if (audio) audio.pause();
+      } else {
+        applyMusicState();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+  }, [applyMusicState]);
 
   const toggleMusic = useCallback(() => {
     setMusicOff((m) => {
