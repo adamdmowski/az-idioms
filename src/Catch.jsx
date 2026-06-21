@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio } from "./audio";
+import { validatePost } from "./validation";
+
+const POST_COOLDOWN_MS = 30_000;
 
 const PLAYER_NAME_KEY = "azidioms_player_name";
 function loadPlayerName() {
@@ -201,32 +204,73 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
   else if (score >= 100) { message = "Nice catching!"; emoji = "💪"; }
   else { message = "Keep practising!"; emoji = "🌱"; }
 
+  const COOLDOWN_KEY = "azidioms_last_post_catch_at";
+  const readCooldownRemaining = () => {
+    try {
+      const raw = localStorage.getItem(COOLDOWN_KEY);
+      if (!raw) return 0;
+      const last = parseInt(raw, 10);
+      if (!Number.isFinite(last)) return 0;
+      return Math.max(0, POST_COOLDOWN_MS - (Date.now() - last));
+    } catch (_) { return 0; }
+  };
+
   const [name, setName] = useState(loadPlayerName);
-  const [postState, setPostState] = useState("idle"); // 'idle'|'posting'|'posted'|'error'
+  const [postState, setPostState] = useState(() =>
+    readCooldownRemaining() > 0 ? "cooldown" : "idle"
+  ); // 'idle'|'posting'|'posted'|'error'|'cooldown'|'rejected'
+  const [rejectReason, setRejectReason] = useState(null);
+  const [cooldownLeft, setCooldownLeft] = useState(() => readCooldownRemaining());
   const nameInputRef = useRef(null);
 
   // Auto-focus the name input on mount so kids can start typing right away.
   useEffect(() => {
     if (!supabaseConfigured) return;
+    if (postState === "cooldown") return;
     const t = setTimeout(() => {
       if (nameInputRef.current) nameInputRef.current.focus();
     }, 250); // wait for entrance animation to settle
     return () => clearTimeout(t);
-  }, []);
+  }, [postState]);
+
+  // Live cooldown countdown while we're in the cooldown state.
+  useEffect(() => {
+    if (postState !== "cooldown") return;
+    const tick = () => {
+      const left = readCooldownRemaining();
+      setCooldownLeft(left);
+      if (left <= 0) setPostState("idle");
+    };
+    const i = setInterval(tick, 500);
+    return () => clearInterval(i);
+  }, [postState]);
 
   const trimmed = name.trim();
-  const canPost = supabaseConfigured && trimmed.length >= 2 && postState !== "posting" && postState !== "posted";
+  const canPost =
+    supabaseConfigured &&
+    trimmed.length >= 2 &&
+    postState !== "posting" &&
+    postState !== "posted" &&
+    postState !== "cooldown";
 
   const handlePost = async () => {
     if (!canPost) return;
+    const check = validatePost({ name: trimmed, score, mode: "catch" });
+    if (!check.ok) {
+      setRejectReason(check.reason);
+      setPostState("rejected");
+      return;
+    }
     setPostState("posting");
+    setRejectReason(null);
     try {
-      const cleanName = trimmed.slice(0, 20);
+      const cleanName = check.name;
       const { error } = await supabase
         .from("scores")
         .insert({ name: cleanName, score, mode: "catch" });
       if (error) throw error;
       savePlayerName(cleanName);
+      try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
       setPostState("posted");
     } catch (e) {
       console.error("Post score failed", e);
@@ -331,7 +375,18 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
             Share your score
           </div>
 
-          {postState !== "posted" ? (
+          {postState === "cooldown" ? (
+            <div style={{
+              padding: "14px 8px",
+              textAlign: "center",
+              color: "var(--color-muted)",
+              fontWeight: 700,
+              fontSize: 13.5,
+            }}>
+              <div style={{ fontSize: 28, marginBottom: 6 }}>⏳</div>
+              You just posted — try again in {Math.ceil(cooldownLeft / 1000)}s.
+            </div>
+          ) : postState !== "posted" ? (
             <>
               <input
                 ref={nameInputRef}
@@ -387,6 +442,16 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
                   fontWeight: 700, textAlign: "center",
                 }}>
                   Couldn't post — try again
+                </div>
+              )}
+              {postState === "rejected" && (
+                <div style={{
+                  marginTop: 10, color: "#B45309", fontSize: 12.5,
+                  fontWeight: 700, textAlign: "center",
+                }}>
+                  {rejectReason === "profanity"
+                    ? "Please choose a different name"
+                    : "That score can't be posted"}
                 </div>
               )}
             </>

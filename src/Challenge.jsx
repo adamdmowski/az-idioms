@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio, speakText } from "./audio";
+import { validatePost } from "./validation";
+
+const POST_COOLDOWN_MS = 30_000;
+const COOLDOWN_KEY = "azidioms_last_post_challenge_at";
 
 // Polish meaning translations — used by the Medium level's "Pokaż po polsku"
 // reveal toggle. Keyed by 2-digit idiom id.
@@ -98,66 +102,24 @@ function shuffle(arr) {
   return a;
 }
 
-function normalize(s) {
-  return (s || "")
-    .toLowerCase()
-    .trim()
-    .replace(/[.,!?;:'"()]/g, "")
-    .replace(/\s+/g, " ");
-}
-
-// Levenshtein edit distance (1-letter typo tolerance). Two-row O(n) memory.
-function levenshtein(a, b) {
-  if (a === b) return 0;
-  const m = a.length, n = b.length;
-  if (m === 0) return n;
-  if (n === 0) return m;
-  let prev = new Array(n + 1);
-  let curr = new Array(n + 1);
-  for (let j = 0; j <= n; j++) prev[j] = j;
-  for (let i = 1; i <= m; i++) {
-    curr[0] = i;
-    for (let j = 1; j <= n; j++) {
-      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
-      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
-    }
-    [prev, curr] = [curr, prev];
-  }
-  return prev[n];
-}
-
-// Accepted answer variants per idiom (2-digit id key). Includes the canonical
-// taught form, sentence forms (past tense, articles), and common alternates.
+// Canonical idiom answers — the kid builds these out of word chips.
+// Keyed by 2-digit idiom id (matches IDIOMS).
 const FILL_ANSWERS = {
-  "01": ["raining cats and dogs", "it's raining cats and dogs"],
-  "02": ["when pigs fly", "pigs fly"],
-  "03": ["be on cloud nine", "on cloud nine", "cloud nine"],
-  "04": ["hold your horses", "hold horses"],
-  "05": ["a storm in a teacup", "storm in a teacup"],
-  "06": ["go cold turkey", "cold turkey"],
-  "07": ["the elephant in the room", "elephant in the room"],
+  "01": ["raining cats and dogs"],
+  "02": ["when pigs fly"],
+  "03": ["on cloud nine"],
+  "04": ["hold your horses"],
+  "05": ["a storm in a teacup"],
+  "06": ["cold turkey"],
+  "07": ["the elephant in the room"],
   "08": ["cool as a cucumber"],
-  "09": ["spill the beans", "spilled the beans", "spilling the beans"],
-  "10": ["let the cat out of the bag", "the cat out of the bag", "cat out of the bag"],
-  "11": ["cat got your tongue", "cat got tongue"],
+  "09": ["spill the beans"],
+  "10": ["let the cat out of the bag"],
+  "11": ["cat got your tongue"],
   "12": ["break a leg"],
-  "13": ["get cold feet", "cold feet", "got cold feet"],
-  "14": ["piece of cake", "a piece of cake"],
+  "13": ["cold feet"],
+  "14": ["piece of cake"],
 };
-
-// Accepts a string OR an array of acceptable variants. Tolerates a single-char
-// typo / missing / extra letter against any variant.
-function answerMatches(typed, expected) {
-  const t = normalize(typed);
-  if (!t) return false;
-  const list = Array.isArray(expected) ? expected : [expected];
-  for (const variant of list) {
-    const n = normalize(variant);
-    if (t === n) return true;
-    if (levenshtein(t, n) <= 1) return true;
-  }
-  return false;
-}
 // ─── Web Audio SFX (lazy-init inside a user gesture) ──
 let _audioCtx = null;
 function getAudioCtx() {
@@ -207,7 +169,38 @@ function makeImageQuestion(type, idiom, idioms) {
   return { type, idiom, options: shuffle([idiom, ...distractors]) };
 }
 
-function makeFillQuestion(idiom) {
+// Generate the chip bank for a fill question: the idiom's own words plus
+// 2 decoys from other idioms. Decoys are picked so they don't collide with the
+// target's words (otherwise the kid couldn't tell if a choice was right).
+function buildChips(targetIdiom, idioms) {
+  const num = String(targetIdiom.id).padStart(2, "0");
+  const variants = FILL_ANSWERS[num] || [targetIdiom.fillAnswer || targetIdiom.name];
+  const targetWords = variants[0].toLowerCase().split(/\s+/).filter(Boolean);
+  const targetSet = new Set(targetWords);
+
+  // Pool of decoy candidates: every word from every other idiom's primary answer.
+  const pool = [];
+  for (const other of idioms) {
+    if (other.id === targetIdiom.id) continue;
+    const onum = String(other.id).padStart(2, "0");
+    const oprimary = (FILL_ANSWERS[onum] || [other.fillAnswer || other.name])[0];
+    for (const w of oprimary.toLowerCase().split(/\s+/)) {
+      if (w && !targetSet.has(w)) pool.push(w);
+    }
+  }
+  // De-duplicate the pool.
+  const uniquePool = [...new Set(pool)];
+
+  const decoys = shuffle(uniquePool).slice(0, 2);
+
+  // Stable per-chip keys so React can re-render without losing identity.
+  const chips = shuffle(
+    [...targetWords, ...decoys].map((word, i) => ({ key: `c${i}-${word}`, word }))
+  );
+  return chips;
+}
+
+function makeFillQuestion(idiom, idioms) {
   const num = String(idiom.id).padStart(2, "0");
   const variants = FILL_ANSWERS[num] || [idiom.fillAnswer || idiom.name];
   return {
@@ -217,6 +210,7 @@ function makeFillQuestion(idiom) {
       new RegExp(idiom.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
       "______"
     ),
+    chips: buildChips(idiom, idioms),
     answer: variants,           // all accepted variants
     primaryAnswer: variants[0], // canonical form used in the hint + reveal
   };
@@ -229,13 +223,13 @@ function generateQuestions(levelId, idioms) {
     return shuffle(idioms).slice(0, 10).map((idiom) => {
       const type = TYPES[Math.floor(Math.random() * TYPES.length)];
       return type === "fill"
-        ? makeFillQuestion(idiom)
+        ? makeFillQuestion(idiom, idioms)
         : makeImageQuestion(type, idiom, idioms);
     });
   }
   // Easy / Medium / Hard now use ALL 14 idioms, shuffled.
   const all = shuffle(idioms);
-  if (levelId === "hard")   return all.map(makeFillQuestion);
+  if (levelId === "hard")   return all.map((i) => makeFillQuestion(i, idioms));
   if (levelId === "medium") return all.map((i) => makeImageQuestion("meaning", i, idioms));
   return all.map((i) => makeImageQuestion("name", i, idioms)); // easy
 }
@@ -451,9 +445,10 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [pickedId, setPickedId] = useState(null);
   const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | null
   const [showPL, setShowPL] = useState(false); // Medium-level Polish reveal toggle
-  // Hangman state (Hard + Boss fill questions)
-  const [guessedLetters, setGuessedLetters] = useState(new Set());
-  const [hintFlashLetter, setHintFlashLetter] = useState(null);
+  // Word-bank state (Hard + Boss fill questions). placedKeys is the chip keys
+  // (in order) the kid has tapped into the build area; chipAttempted = whether
+  // they've pressed Check yet on this question.
+  const [placedKeys, setPlacedKeys] = useState([]);
   // Replay loop — review missed questions before showing results
   const [activeQuestions, setActiveQuestions] = useState(questions);
   const [missedQuestions, setMissedQuestions] = useState([]);
@@ -461,10 +456,6 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [showTransition, setShowTransition] = useState(false);
   const timerRef = useRef(null);
   const correctCountRef = useRef(0);
-  // Single-fire guards for the hangman win/lose/hint side effects
-  const wonRef = useRef(false);
-  const lostRef = useRef(false);
-  const hintTriggeredRef = useRef(false);
 
   const question = activeQuestions[questionIdx];
   const isLast = questionIdx + 1 >= activeQuestions.length;
@@ -477,11 +468,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     setPickedId(null);
     setFeedback(null);
     setShowPL(false);
-    setGuessedLetters(new Set());
-    setHintFlashLetter(null);
-    wonRef.current = false;
-    lostRef.current = false;
-    hintTriggeredRef.current = false;
+    setPlacedKeys([]);
     if (!question) return;
 
     // Auto-read the prompt at the START of each question — Easy + Medium only.
@@ -550,96 +537,53 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     }
   };
 
-  // ── Hangman helpers (Hard + Boss fill questions) ───────
-  // Derive answer + letter sets from the current question.
-  const hangmanAnswer = (
-    question && question.type === "fill"
-      ? (question.primaryAnswer || question.idiom.name)
-      : ""
-  ).toLowerCase();
-  const hangmanAnswerLetters = new Set(
-    [...hangmanAnswer].filter((c) => /[a-z]/.test(c))
-  );
-  const correctlyGuessed = new Set(
-    [...guessedLetters].filter((l) => hangmanAnswerLetters.has(l))
-  );
-  const wrongLetters = [...guessedLetters].filter((l) => !hangmanAnswerLetters.has(l));
-  const wrongCount = wrongLetters.length;
-  const won =
-    question?.type === "fill" &&
-    hangmanAnswerLetters.size > 0 &&
-    [...hangmanAnswerLetters].every((l) => correctlyGuessed.has(l));
-  const lost = question?.type === "fill" && wrongCount >= 6;
+  // ── Word-bank helpers (Hard + Boss fill questions) ───────
+  const chips = question?.type === "fill" ? question.chips : [];
+  const chipByKey = (key) => chips.find((c) => c.key === key);
+  const placedWords = placedKeys.map((k) => chipByKey(k)?.word || "");
+  const availableChips = chips.filter((c) => !placedKeys.includes(c.key));
 
-  const handleLetterTap = (letter) => {
-    if (!question || question.type !== "fill") return;
-    if (won || lost) return;
-    if (guessedLetters.has(letter)) return;
-    if (hintFlashLetter != null) return;        // pause input during a hint flash
+  const placeChip = (chip) => {
     if (feedback === "correct") return;
-
-    const isCorrect = hangmanAnswerLetters.has(letter);
-    if (isCorrect) {
-      correctSound();
-    } else {
-      wrongSound();
-      // First wrong letter for this question → queue for the replay round
-      if (wrongCount === 0 && !inReplay) {
-        setMissedQuestions((m) => [...m, question]);
-      }
-    }
-    setGuessedLetters((prev) => {
-      const next = new Set(prev);
-      next.add(letter);
-      return next;
-    });
+    if (placedKeys.includes(chip.key)) return;
+    setPlacedKeys((p) => [...p, chip.key]);
+  };
+  const removePlacedChip = (key) => {
+    if (feedback === "correct") return;
+    setPlacedKeys((p) => p.filter((k) => k !== key));
   };
 
-  // Win / lose / hint side effects — single-fire via refs
-  useEffect(() => {
+  const handleCheckWordBank = () => {
     if (!question || question.type !== "fill") return;
+    if (placedKeys.length === 0) return;
+    if (feedback === "correct") return;
 
-    if (won && !wonRef.current) {
-      wonRef.current = true;
-      const firstTry = wrongCount === 0 && !inReplay;
-      if (firstTry) setCorrectCount((c) => c + 1);
+    const built = placedWords.join(" ").trim().toLowerCase();
+    const target = (question.primaryAnswer || "").trim().toLowerCase();
+    const isCorrect = built === target;
+
+    if (isCorrect) {
+      const firstTry = attempts === 0;
+      if (firstTry && !inReplay) setCorrectCount((c) => c + 1);
+      correctSound();
       playForIdiom(question.idiom, "name");
       setFeedback("correct");
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(advanceQuestion, 1000);
-      return;
-    }
-
-    if (lost && !lostRef.current) {
-      lostRef.current = true;
+    } else {
+      if (attempts === 0 && !inReplay) {
+        setMissedQuestions((m) => [...m, question]);
+      }
+      wrongSound();
       setFeedback("wrong");
+      setAttempts((a) => a + 1);
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(advanceQuestion, 1500);
-      return;
+      timerRef.current = setTimeout(() => {
+        setFeedback(null);
+        setPlacedKeys([]); // reset chips so the kid can try again
+      }, 700);
     }
-
-    // Hint after 3 wrong guesses — reveal the next un-guessed letter for free
-    if (!won && !lost && wrongCount >= 3 && !hintTriggeredRef.current && hintFlashLetter == null) {
-      hintTriggeredRef.current = true;
-      const ordered = [...hangmanAnswer].filter((c) => /[a-z]/.test(c));
-      const hint = ordered.find((l) => !correctlyGuessed.has(l));
-      if (hint) setHintFlashLetter(hint);
-    }
-  }, [won, lost, wrongCount, hintFlashLetter, question?.idiom?.id, inReplay]);
-
-  // Hint flash → after the 800ms gold flash, add the letter to guessedLetters
-  useEffect(() => {
-    if (hintFlashLetter == null) return;
-    const t = setTimeout(() => {
-      setGuessedLetters((prev) => {
-        const next = new Set(prev);
-        next.add(hintFlashLetter);
-        return next;
-      });
-      setHintFlashLetter(null);
-    }, 800);
-    return () => clearTimeout(t);
-  }, [hintFlashLetter]);
+  };
 
   if (!question) return null;
 
@@ -895,165 +839,116 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
 
         {question.type === "fill" && (
           <div style={{ maxWidth: 460, margin: "0 auto" }}>
-            {/* Letter slots — grouped by word so wrapping respects word boundaries */}
+            {/* Build area — placed chips in tap order. Tap a placed chip to undo. */}
+            <div
+              aria-label="Your answer"
+              style={{
+                minHeight: 56,
+                background: "var(--color-card)",
+                border: "2px dashed var(--color-line)",
+                borderRadius: 14,
+                padding: "10px 12px",
+                marginBottom: 14,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 8,
+                alignItems: "center",
+                justifyContent: placedKeys.length === 0 ? "center" : "flex-start",
+              }}
+            >
+              {placedKeys.length === 0 ? (
+                <span style={{
+                  color: "var(--color-muted)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  fontStyle: "italic",
+                }}>Tap words below to build the idiom</span>
+              ) : (
+                placedKeys.map((key) => {
+                  const chip = chipByKey(key);
+                  if (!chip) return null;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => removePlacedChip(key)}
+                      disabled={feedback === "correct"}
+                      aria-label={`Remove "${chip.word}"`}
+                      className="az-tap"
+                      style={{
+                        background: "linear-gradient(135deg, var(--color-ink-soft), var(--color-ink))",
+                        color: "#fff",
+                        border: "none",
+                        borderRadius: 999,
+                        padding: "8px 14px",
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 700,
+                        fontSize: "clamp(14px, 4vw, 16px)",
+                        cursor: feedback === "correct" ? "default" : "pointer",
+                        boxShadow: "var(--shadow-sm)",
+                        WebkitTapHighlightColor: "transparent",
+                      }}
+                    >{chip.word}</button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Chip bank — available chips to tap */}
             <div style={{
               display: "flex",
               flexWrap: "wrap",
+              gap: 8,
               justifyContent: "center",
-              gap: 14,
-              marginBottom: 14,
+              marginBottom: 16,
             }}>
-              {hangmanAnswer.split(" ").map((word, wi) => (
-                <div key={wi} style={{ display: "flex", gap: 4 }}>
-                  {[...word].map((ch, ci) => {
-                    const lower = ch.toLowerCase();
-                    const isLetter = /[a-z]/.test(lower);
-                    if (!isLetter) {
-                      return (
-                        <span key={ci} style={{
-                          display: "inline-flex",
-                          alignItems: "flex-end",
-                          height: "clamp(32px, 9vw, 40px)",
-                          fontSize: "clamp(18px, 5.5vw, 24px)",
-                          fontFamily: "var(--font-display)",
-                          fontWeight: 700,
-                          color: "var(--color-text)",
-                        }}>{ch}</span>
-                      );
-                    }
-                    const revealed = correctlyGuessed.has(lower);
-                    const isLostReveal = lost && !revealed;
-                    const show = revealed || isLostReveal;
-                    return (
-                      <span key={ci} style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        width: "clamp(24px, 7vw, 30px)",
-                        height: "clamp(32px, 9vw, 40px)",
-                        borderBottom: "3px solid var(--color-text)",
-                        fontFamily: "var(--font-display)",
-                        fontSize: "clamp(18px, 5.5vw, 24px)",
-                        fontWeight: 700,
-                        color: isLostReveal ? "#DC2626" : "var(--color-ink)",
-                        transition: "color 220ms var(--ease-out)",
-                      }}>
-                        {show ? ch.toUpperCase() : ""}
-                      </span>
-                    );
-                  })}
-                </div>
+              {availableChips.map((chip) => (
+                <button
+                  key={chip.key}
+                  onClick={() => placeChip(chip)}
+                  disabled={feedback === "correct"}
+                  aria-label={`Add "${chip.word}"`}
+                  className="az-tap"
+                  style={{
+                    background: "var(--color-card-soft)",
+                    color: "var(--color-text)",
+                    border: "1px solid var(--color-line)",
+                    borderRadius: 999,
+                    padding: "9px 16px",
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: "clamp(14px, 4vw, 16px)",
+                    cursor: feedback === "correct" ? "default" : "pointer",
+                    boxShadow: "var(--shadow-sm)",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >{chip.word}</button>
               ))}
             </div>
 
-            {/* Hangman SVG — gallows + body parts added per wrong guess */}
-            <div style={{
-              display: "flex",
-              justifyContent: "center",
-              marginBottom: 14,
-            }}>
-              <svg width="120" height="150" viewBox="0 0 120 150" aria-hidden="true">
-                {/* Gallows (always shown) */}
-                <line x1="8" y1="146" x2="92" y2="146" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
-                <line x1="22" y1="146" x2="22" y2="8" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
-                <line x1="22" y1="8" x2="78" y2="8" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
-                <line x1="78" y1="8" x2="78" y2="24" stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-                {/* Body parts */}
-                {wrongCount >= 1 && (
-                  <circle key="head" className="hangman-part" cx="78" cy="35" r="10"
-                          stroke="var(--color-text)" strokeWidth="2.5" fill="none"/>
-                )}
-                {wrongCount >= 2 && (
-                  <line key="body" className="hangman-part" x1="78" y1="45" x2="78" y2="88"
-                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-                )}
-                {wrongCount >= 3 && (
-                  <line key="larm" className="hangman-part" x1="78" y1="58" x2="62" y2="74"
-                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-                )}
-                {wrongCount >= 4 && (
-                  <line key="rarm" className="hangman-part" x1="78" y1="58" x2="94" y2="74"
-                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-                )}
-                {wrongCount >= 5 && (
-                  <line key="lleg" className="hangman-part" x1="78" y1="88" x2="62" y2="114"
-                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-                )}
-                {wrongCount >= 6 && (
-                  <line key="rleg" className="hangman-part" x1="78" y1="88" x2="94" y2="114"
-                        stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-                )}
-              </svg>
-            </div>
-
-            {/* QWERTY keyboard */}
-            <div style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 5,
-              alignItems: "center",
-            }}>
-              {[
-                ["Q","W","E","R","T","Y","U","I","O","P"],
-                ["A","S","D","F","G","H","J","K","L"],
-                ["Z","X","C","V","B","N","M"],
-              ].map((row, ri) => (
-                <div key={ri} style={{ display: "flex", gap: 4, justifyContent: "center" }}>
-                  {row.map((letter) => {
-                    const lower = letter.toLowerCase();
-                    const guessed = guessedLetters.has(lower);
-                    const isCorrect = hangmanAnswerLetters.has(lower);
-                    const flash = hintFlashLetter === lower;
-                    const disabled = guessed || won || lost || hintFlashLetter != null;
-
-                    let bg, color, borderColor;
-                    if (flash) {
-                      bg = "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))";
-                      color = "#fff";
-                      borderColor = "var(--color-sun-deep)";
-                    } else if (guessed && isCorrect) {
-                      bg = "linear-gradient(135deg, #22C55E, #16A34A)";
-                      color = "#fff";
-                      borderColor = "#16A34A";
-                    } else if (guessed && !isCorrect) {
-                      bg = "#9CA3AF";
-                      color = "#fff";
-                      borderColor = "#9CA3AF";
-                    } else {
-                      bg = "#fff";
-                      color = "var(--color-ink)";
-                      borderColor = "var(--color-line)";
-                    }
-
-                    return (
-                      <button
-                        key={letter}
-                        onClick={() => handleLetterTap(lower)}
-                        disabled={disabled}
-                        aria-label={`Letter ${letter}`}
-                        className={flash ? "hangman-hint-flash" : undefined}
-                        style={{
-                          width: "clamp(28px, 8.6vw, 36px)",
-                          height: "clamp(36px, 11vw, 44px)",
-                          padding: 0,
-                          borderRadius: 8,
-                          background: bg,
-                          color,
-                          border: `1px solid ${borderColor}`,
-                          fontFamily: "var(--font-display)",
-                          fontWeight: 700,
-                          fontSize: "clamp(13px, 4vw, 16px)",
-                          cursor: disabled ? "default" : "pointer",
-                          opacity: (guessed && !isCorrect) ? 0.65 : 1,
-                          transition: "background 200ms var(--ease-out), color 200ms var(--ease-out), opacity 200ms var(--ease-out)",
-                          WebkitTapHighlightColor: "transparent",
-                          boxShadow: "var(--shadow-sm)",
-                        }}
-                      >{letter}</button>
-                    );
-                  })}
-                </div>
-              ))}
+            {/* Check button */}
+            <div style={{ textAlign: "center" }}>
+              <button
+                onClick={handleCheckWordBank}
+                disabled={placedKeys.length === 0 || feedback === "correct"}
+                className="az-tap"
+                style={{
+                  background: placedKeys.length === 0
+                    ? "var(--color-card-soft)"
+                    : "linear-gradient(135deg, #22C55E, #16A34A)",
+                  color: placedKeys.length === 0 ? "var(--color-muted)" : "#fff",
+                  border: "none",
+                  padding: "12px 28px",
+                  borderRadius: 16,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700,
+                  fontSize: 16,
+                  cursor: placedKeys.length === 0 ? "default" : "pointer",
+                  boxShadow: placedKeys.length === 0 ? "none" : "var(--shadow-glow-leaf)",
+                  minHeight: 48,
+                  minWidth: 160,
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >Check ✓</button>
             </div>
           </div>
         )}
@@ -1074,9 +969,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
           >
             {feedback === "correct"
               ? `✅ Correct — "${question.idiom.name}"`
-              : question.type === "fill" && lost
-                ? `The answer was: "${question.idiom.name}"`
-                : "❌ Try again!"}
+              : "❌ Try again!"}
           </div>
         )}
       </div>
@@ -1261,31 +1154,69 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
 // Used by every results screen. Returns null when Supabase isn't configured
 // so the parent doesn't need a guard.
 function PostScoreCard({ score, onViewFame }) {
+  const readCooldownRemaining = () => {
+    try {
+      const raw = localStorage.getItem(COOLDOWN_KEY);
+      if (!raw) return 0;
+      const last = parseInt(raw, 10);
+      if (!Number.isFinite(last)) return 0;
+      return Math.max(0, POST_COOLDOWN_MS - (Date.now() - last));
+    } catch (_) { return 0; }
+  };
+
   const [name, setName] = useState(loadPlayerName);
-  const [postState, setPostState] = useState("idle"); // 'idle'|'posting'|'posted'|'error'
+  const [postState, setPostState] = useState(() =>
+    readCooldownRemaining() > 0 ? "cooldown" : "idle"
+  ); // 'idle'|'posting'|'posted'|'error'|'rejected'|'cooldown'
+  const [rejectReason, setRejectReason] = useState(null);
+  const [cooldownLeft, setCooldownLeft] = useState(() => readCooldownRemaining());
   const nameInputRef = useRef(null);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
+    if (postState === "cooldown") return;
     const t = setTimeout(() => { if (nameInputRef.current) nameInputRef.current.focus(); }, 280);
     return () => clearTimeout(t);
-  }, []);
+  }, [postState]);
+
+  useEffect(() => {
+    if (postState !== "cooldown") return;
+    const tick = () => {
+      const left = readCooldownRemaining();
+      setCooldownLeft(left);
+      if (left <= 0) setPostState("idle");
+    };
+    const i = setInterval(tick, 500);
+    return () => clearInterval(i);
+  }, [postState]);
 
   if (!supabaseConfigured) return null;
 
   const trimmed = name.trim();
-  const canPost = trimmed.length >= 2 && postState !== "posting" && postState !== "posted";
+  const canPost =
+    trimmed.length >= 2 &&
+    postState !== "posting" &&
+    postState !== "posted" &&
+    postState !== "cooldown";
 
   const handlePost = async () => {
     if (!canPost) return;
+    const check = validatePost({ name: trimmed, score, mode: "challenge" });
+    if (!check.ok) {
+      setRejectReason(check.reason);
+      setPostState("rejected");
+      return;
+    }
     setPostState("posting");
+    setRejectReason(null);
     try {
-      const cleanName = trimmed.slice(0, 20);
+      const cleanName = check.name;
       const { error } = await supabase
         .from("scores")
         .insert({ name: cleanName, score, mode: "challenge" });
       if (error) throw error;
       savePlayerName(cleanName);
+      try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
       setPostState("posted");
     } catch (e) {
       console.error("Post challenge score failed", e);
@@ -1320,7 +1251,18 @@ function PostScoreCard({ score, onViewFame }) {
       }}>
         Share your score
       </div>
-      {postState !== "posted" ? (
+      {postState === "cooldown" ? (
+        <div style={{
+          padding: "14px 8px",
+          textAlign: "center",
+          color: "var(--color-muted)",
+          fontWeight: 700,
+          fontSize: 13.5,
+        }}>
+          <div style={{ fontSize: 28, marginBottom: 6 }}>⏳</div>
+          You just posted — try again in {Math.ceil(cooldownLeft / 1000)}s.
+        </div>
+      ) : postState !== "posted" ? (
         <>
           <input
             ref={nameInputRef}
@@ -1376,6 +1318,16 @@ function PostScoreCard({ score, onViewFame }) {
               marginTop: 10, color: "#B91C1C", fontSize: 12.5,
               fontWeight: 700, textAlign: "center",
             }}>Couldn't post — try again</div>
+          )}
+          {postState === "rejected" && (
+            <div style={{
+              marginTop: 10, color: "#B45309", fontSize: 12.5,
+              fontWeight: 700, textAlign: "center",
+            }}>
+              {rejectReason === "profanity"
+                ? "Please choose a different name"
+                : "That score can't be posted"}
+            </div>
           )}
         </>
       ) : (

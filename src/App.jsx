@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Catch from "./Catch";
 import Challenge from "./Challenge";
+import Hangman from "./Hangman";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio } from "./audio";
 
@@ -257,15 +258,6 @@ const FUNFACT_PL = {
   "14": "Popularne od lat 30. XX wieku. Pomysł jest taki, że zjedzenie kawałka ciasta to jedna z najłatwiejszych i najprzyjemniejszych rzeczy, jakie można zrobić!",
 };
 
-function shuffle(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 // Read the persisted mute state synchronously for the floating-button initial render.
 function readMuted() {
   try { return localStorage.getItem("az-idioms-muted") === "1"; } catch (_) { return false; }
@@ -274,18 +266,11 @@ function readMusicOff() {
   try { return localStorage.getItem("azidioms_music_off") === "1"; } catch (_) { return false; }
 }
 
-function formatTime(ms) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  return `${m}:${rem.toString().padStart(2, "0")}`;
-}
-
 // ─── Sub-components ──────────────────────────
 
 function Landing({ onNav, onZone, cutouts, isModalOpen }) {
   const iconButtons = [
-    { p: "catch",       icon: "🎮", label: "Catch",
+    { p: "games",       icon: "🎮", label: "Games",
       gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)", shadow: "var(--shadow-glow-coral)" },
     { p: "quiz",        icon: "🧠", label: "Quiz",
       gradient: "linear-gradient(135deg, #22C55E, #16A34A)", shadow: "var(--shadow-glow-leaf)" },
@@ -541,140 +526,93 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
   );
 }
 
-function LearnMode({ onNav, initialId }) {
-  const [idx, setIdx] = useState(() => {
-    if (initialId == null) return 0;
-    const i = IDIOMS.findIndex((x) => x.id === initialId);
-    return i >= 0 ? i : 0;
-  });
-  const [flipped, setFlipped] = useState(false);
-  const idiom = IDIOMS[idx];
+// ─── Game Room (sub-menu for the 🎮 button) ──────────
 
-  const next = () => { setFlipped(false); setIdx((i) => Math.min(i + 1, IDIOMS.length - 1)); };
-  const prev = () => { setFlipped(false); setIdx((i) => Math.max(i - 1, 0)); };
-
+function GameRoom({ onNav }) {
+  const games = [
+    {
+      p: "catch",
+      icon: "🎯",
+      title: "Catch",
+      desc: "Tap the right character before it floats away.",
+      gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)",
+      glow: "var(--shadow-glow-coral)",
+    },
+    {
+      p: "hangman",
+      icon: "🔤",
+      title: "Hangman",
+      desc: "Guess the idiom one letter at a time.",
+      gradient: "linear-gradient(135deg, #A855F7, #7C3AED)",
+      glow: "0 8px 22px rgba(124, 58, 237, 0.40)",
+    },
+  ];
   return (
-    <div style={{ padding: "20px", maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <span style={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}>
-          {idx + 1} / {IDIOMS.length}
-        </span>
-        <div style={{
-          height: 6, flex: 1, marginLeft: 12, background: "#E5E7EB", borderRadius: 3, overflow: "hidden"
-        }}>
-          <div style={{
-            height: "100%", width: `${((idx + 1) / IDIOMS.length) * 100}%`,
-            background: "linear-gradient(90deg, #16A34A, #22C55E)",
-            borderRadius: 3, transition: "width 0.3s ease",
-          }} />
-        </div>
-      </div>
+    <main className="az-fade-in" style={{
+      padding: "70px 18px 40px",
+      maxWidth: 480,
+      margin: "0 auto",
+      textAlign: "center",
+    }}>
+      <h1 style={{
+        fontFamily: "var(--font-display)",
+        fontSize: "clamp(30px, 8vw, 42px)",
+        color: "var(--color-text)",
+        margin: "0 0 6px",
+      }}>🎮 Games</h1>
+      <p style={{
+        color: "var(--color-muted)",
+        fontSize: 13.5,
+        fontWeight: 600,
+        margin: "0 0 24px",
+      }}>Pick a game!</p>
 
-      <div
-        onClick={() => setFlipped(!flipped)}
-        style={{
-          background: flipped
-            ? "linear-gradient(135deg, #FEF7E7, #FFF8F0)"
-            : "linear-gradient(135deg, #EFF6FF, #F0F9FF)",
-          borderRadius: 20, padding: "28px 24px", minHeight: 360,
-          cursor: "pointer", border: "2px solid " + (flipped ? "#F59E0B" : "#3B82F6"),
-          transition: "all 0.3s ease",
-          boxShadow: "0 8px 30px rgba(0,0,0,0.08)",
-        }}
-      >
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <span style={{ fontSize: 48 }}>{idiom.emoji}</span>
-        </div>
-
-        <h2 style={{ textAlign: "center", fontSize: 22, fontWeight: 800, color: "#1E3A5F", margin: "0 0 4px 0" }}>
-          {idiom.name}
-        </h2>
-
-        <button
-          onClick={(e) => { e.stopPropagation(); playForIdiom(idiom, "name"); }}
-          style={{
-            display: "block", margin: "8px auto 16px auto",
-            background: "#1E3A5F", color: "#fff", border: "none",
-            padding: "6px 16px", borderRadius: 20, cursor: "pointer",
-            fontSize: 13, fontWeight: 600,
-          }}
-        >
-          🔊 Listen
-        </button>
-
-        {!flipped ? (
-          <p style={{ textAlign: "center", color: "#6B7280", fontSize: 14, marginTop: 20 }}>
-            Tap the card to see the meaning
-          </p>
-        ) : (
-          <div>
-            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-                Meaning
-              </div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: "#1A1A2E" }}>{idiom.meaning}</div>
-              <div style={{ fontSize: 13, color: "#6B7280", marginTop: 4 }}>🇵🇱 {idiom.meaningPL}</div>
-            </div>
-            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#2563EB", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-                Example
-              </div>
-              <div style={{ fontSize: 14, color: "#374151", fontStyle: "italic", lineHeight: 1.5 }}>
-                "{idiom.example}"
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); playForIdiom(idiom, "example"); }}
-                style={{
-                  marginTop: 8, background: "#EFF6FF", color: "#2563EB", border: "1px solid #BFDBFE",
-                  padding: "4px 12px", borderRadius: 12, cursor: "pointer", fontSize: 12,
-                }}
-              >
-                🔊 Listen to example
-              </button>
-            </div>
-            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16, marginBottom: 12 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#7C3AED", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-                In the picture
-              </div>
-              <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{idiom.scene}</div>
-            </div>
-            <div style={{ background: "var(--color-card)", borderRadius: 12, padding: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#D97706", textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-                Did you know?
-              </div>
-              <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{idiom.funFact}</div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 16, gap: 12 }}>
-        <button onClick={prev} disabled={idx === 0} style={{
-          flex: 1, padding: "14px", borderRadius: 12, border: "2px solid #E5E7EB",
-          background: idx === 0 ? "#F3F4F6" : "#fff", color: idx === 0 ? "#9CA3AF" : "#374151",
-          fontSize: 16, fontWeight: 600, cursor: idx === 0 ? "default" : "pointer",
-        }}>
-          ← Previous
-        </button>
-        {idx === IDIOMS.length - 1 ? (
-          <button onClick={() => onNav("quiz")} style={{
-            flex: 1, padding: "14px", borderRadius: 12, border: "none",
-            background: "linear-gradient(135deg, #DC2626, #B91C1C)", color: "#fff",
-            fontSize: 16, fontWeight: 700, cursor: "pointer",
-          }}>
-            Take the Challenge 🧠
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {games.map((g) => (
+          <button
+            key={g.p}
+            onClick={() => onNav(g.p)}
+            className="az-tap"
+            aria-label={g.title}
+            style={{
+              background: g.gradient,
+              color: "#fff",
+              border: "none",
+              padding: "16px 18px",
+              borderRadius: 22,
+              cursor: "pointer",
+              boxShadow: g.glow,
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              minHeight: 96,
+              textAlign: "left",
+            }}
+          >
+            <span aria-hidden="true" style={{
+              fontSize: 48,
+              minWidth: 60,
+              textAlign: "center",
+              lineHeight: 1,
+            }}>{g.icon}</span>
+            <span style={{ flex: 1, lineHeight: 1.25, minWidth: 0 }}>
+              <span style={{
+                display: "block",
+                fontFamily: "var(--font-display)",
+                fontSize: 22, fontWeight: 700,
+                letterSpacing: "0.2px",
+              }}>{g.title}</span>
+              <span style={{
+                display: "block",
+                fontSize: 13, fontWeight: 600,
+                opacity: 0.92, marginTop: 3,
+              }}>{g.desc}</span>
+            </span>
+            <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>→</span>
           </button>
-        ) : (
-          <button onClick={next} style={{
-            flex: 1, padding: "14px", borderRadius: 12, border: "none",
-            background: "linear-gradient(135deg, #3B82F6, #2563EB)", color: "#fff",
-            fontSize: 16, fontWeight: 600, cursor: "pointer",
-          }}>
-            Next →
-          </button>
-        )}
+        ))}
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -705,7 +643,7 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 function WallOfFame({ onNav }) {
   const [status, setStatus] = useState("loading"); // 'loading'|'ok'|'error'|'unconfigured'
   const [scores, setScores] = useState([]);
-  const [activeTab, setActiveTab] = useState("catch"); // 'catch' | 'challenge'
+  const [activeTab, setActiveTab] = useState("catch"); // 'catch' | 'challenge' | 'hangman'
 
   const fetchScores = useCallback(async (modeArg) => {
     const mode = modeArg || activeTab;
@@ -779,8 +717,9 @@ function WallOfFame({ onNav }) {
         border: "1px solid var(--color-line)",
       }}>
         {[
-          { id: "catch", label: "🎮 Catch" },
-          { id: "challenge", label: "🧠 Challenge" },
+          { id: "catch", label: "🎯 Catch" },
+          { id: "challenge", label: "🧠 Quiz" },
+          { id: "hangman", label: "🔤 Hangman" },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -852,31 +791,46 @@ function WallOfFame({ onNav }) {
         </div>
       )}
 
-      {status === "ok" && scores.length === 0 && (
-        <div style={{ textAlign: "center", padding: "40px 20px" }}>
-          <div style={{ fontSize: 64, marginBottom: 10 }} aria-hidden="true">🦗</div>
-          <p style={{ color: "var(--color-muted)", fontSize: 16, marginBottom: 18, fontWeight: 600 }}>
-            No scores yet — be the first! {activeTab === "catch" ? "🎮" : "🧠"}
-          </p>
-          <button
-            onClick={() => onNav(activeTab === "catch" ? "catch" : "quiz")}
-            className="az-tap"
-            style={{
-              background: activeTab === "catch"
-                ? "linear-gradient(135deg, #EF6F5C, #DC2626)"
-                : "linear-gradient(135deg, #F59E0B, #D97706)",
-              color: "#fff",
-              border: "none",
-              padding: "14px 28px",
-              borderRadius: 18,
-              fontFamily: "var(--font-display)",
-              fontWeight: 700, fontSize: 17,
-              cursor: "pointer",
-              boxShadow: activeTab === "catch" ? "var(--shadow-glow-coral)" : "var(--shadow-glow-sun)",
-            }}
-          >{activeTab === "catch" ? "🎮 Play Catch" : "🧠 Play Challenge"}</button>
-        </div>
-      )}
+      {status === "ok" && scores.length === 0 && (() => {
+        const cta =
+          activeTab === "catch"
+            ? { dest: "catch",   label: "🎯 Play Catch",
+                emoji: "🎯",
+                bg:    "linear-gradient(135deg, #EF6F5C, #DC2626)",
+                glow:  "var(--shadow-glow-coral)" }
+            : activeTab === "hangman"
+            ? { dest: "hangman", label: "🔤 Play Hangman",
+                emoji: "🔤",
+                bg:    "linear-gradient(135deg, #A855F7, #7C3AED)",
+                glow:  "0 8px 22px rgba(124, 58, 237, 0.40)" }
+            : { dest: "quiz",    label: "🧠 Play Quiz",
+                emoji: "🧠",
+                bg:    "linear-gradient(135deg, #F59E0B, #D97706)",
+                glow:  "var(--shadow-glow-sun)" };
+        return (
+          <div style={{ textAlign: "center", padding: "40px 20px" }}>
+            <div style={{ fontSize: 64, marginBottom: 10 }} aria-hidden="true">🦗</div>
+            <p style={{ color: "var(--color-muted)", fontSize: 16, marginBottom: 18, fontWeight: 600 }}>
+              No scores yet — be the first! {cta.emoji}
+            </p>
+            <button
+              onClick={() => onNav(cta.dest)}
+              className="az-tap"
+              style={{
+                background: cta.bg,
+                color: "#fff",
+                border: "none",
+                padding: "14px 28px",
+                borderRadius: 18,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700, fontSize: 17,
+                cursor: "pointer",
+                boxShadow: cta.glow,
+              }}
+            >{cta.label}</button>
+          </div>
+        );
+      })()}
 
       {status === "ok" && scores.length > 0 && (
         <>
@@ -980,24 +934,38 @@ function WallOfFame({ onNav }) {
           )}
 
           <div style={{ marginTop: 18 }}>
-            <button
-              onClick={() => onNav(activeTab === "catch" ? "catch" : "quiz")}
-              className="az-tap"
-              style={{
-                width: "100%",
-                background: activeTab === "catch"
-                  ? "linear-gradient(135deg, #EF6F5C, #DC2626)"
-                  : "linear-gradient(135deg, #F59E0B, #D97706)",
-                color: "#fff",
-                border: "none",
-                padding: "14px",
-                borderRadius: 16,
-                fontFamily: "var(--font-display)",
-                fontWeight: 700, fontSize: 16,
-                cursor: "pointer",
-                boxShadow: activeTab === "catch" ? "var(--shadow-glow-coral)" : "var(--shadow-glow-sun)",
-              }}
-            >{activeTab === "catch" ? "🎮 Play Catch" : "🧠 Play Challenge"}</button>
+            {(() => {
+              const cta =
+                activeTab === "catch"
+                  ? { dest: "catch",   label: "🎯 Play Catch",
+                      bg:   "linear-gradient(135deg, #EF6F5C, #DC2626)",
+                      glow: "var(--shadow-glow-coral)" }
+                  : activeTab === "hangman"
+                  ? { dest: "hangman", label: "🔤 Play Hangman",
+                      bg:   "linear-gradient(135deg, #A855F7, #7C3AED)",
+                      glow: "0 8px 22px rgba(124, 58, 237, 0.40)" }
+                  : { dest: "quiz",    label: "🧠 Play Quiz",
+                      bg:   "linear-gradient(135deg, #F59E0B, #D97706)",
+                      glow: "var(--shadow-glow-sun)" };
+              return (
+                <button
+                  onClick={() => onNav(cta.dest)}
+                  className="az-tap"
+                  style={{
+                    width: "100%",
+                    background: cta.bg,
+                    color: "#fff",
+                    border: "none",
+                    padding: "14px",
+                    borderRadius: 16,
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700, fontSize: 16,
+                    cursor: "pointer",
+                    boxShadow: cta.glow,
+                  }}
+                >{cta.label}</button>
+              );
+            })()}
           </div>
         </>
       )}
@@ -1403,7 +1371,6 @@ export default function App() {
   });
   const [muted, setMuted] = useState(readMuted);
   const [musicOff, setMusicOff] = useState(readMusicOff);
-  const [selectedIdiomId, setSelectedIdiomId] = useState(null);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
   const [cutouts, setCutouts] = useState([]);
 
@@ -1631,8 +1598,6 @@ export default function App() {
   }, []);
 
   const handleNav = (p) => {
-    // Header/CTA nav always starts Learn at idiom 1; only zone-taps preserve selection.
-    setSelectedIdiomId(null);
     setPage(p);
   };
 
@@ -1742,7 +1707,7 @@ export default function App() {
           isModalOpen={learningIdiomId != null}
         />
       )}
-      {page === "learn" && <LearnMode onNav={handleNav} initialId={selectedIdiomId} />}
+      {page === "games" && <GameRoom onNav={handleNav} />}
       {page === "quiz" && (
         <Challenge
           idioms={IDIOMS}
@@ -1756,7 +1721,15 @@ export default function App() {
         <Catch
           cutouts={cutouts}
           idioms={IDIOMS}
-          onBack={() => handleNav("landing")}
+          onBack={() => handleNav("games")}
+          onViewFame={() => handleNav("leaderboard")}
+        />
+      )}
+      {page === "hangman" && (
+        <Hangman
+          cutouts={cutouts}
+          idioms={IDIOMS}
+          onBack={() => handleNav("games")}
           onViewFame={() => handleNav("leaderboard")}
         />
       )}
