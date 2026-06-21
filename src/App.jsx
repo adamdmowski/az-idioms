@@ -203,7 +203,7 @@ const EQUIVALENT_PL = {
   "07": null,
   "08": "Zachować zimną krew",
   "09": "Puścić farbę",
-  "10": null,
+  "10": "Wypuścić kota z worka",
   "11": "Zapomniałeś języka w gębie?",
   "12": "Połamania nóg!",
   "13": "Dostać pietra",
@@ -227,7 +227,7 @@ const MEANING_PL = {
 };
 const EXAMPLE_PL = {
   "01": "Weź parasol — pada jak z cebra!",
-  "02": "Będziesz codziennie sprzątać pokój? Jasne — jak świnie zaczną latać!",
+  "02": "Będziesz codziennie sprzątać pokój? Jasne — prędzej mi kaktus na dłoni wyrośnie!",
   "03": "Była w siódmym niebie, kiedy wygrała nagrodę.",
   "04": "Nie tak szybko — pozwól mi najpierw skończyć!",
   "05": "Kłócili się o miejsca, ale to była burza w szklance wody.",
@@ -239,7 +239,7 @@ const EXAMPLE_PL = {
   "11": "Dlaczego jesteś taki cichy? Kot zjadł ci język?",
   "12": "Dziś twój wielki występ — połamania nóg!",
   "13": "Stchórzył tuż przed swoim przemówieniem.",
-  "14": "To zadanie domowe to była bułka z masłem.",
+  "14": "Zadanie domowe było bułką z masłem.",
 };
 const FUNFACT_PL = {
   "01": "To wyrażenie jest używane od XVII wieku. W dawnym Londynie ulewy zalewały ulice i wraz z wodą porywały bezpańskie zwierzęta.",
