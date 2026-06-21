@@ -533,8 +533,16 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
 
 
 // ─── Main game component ────────────────
-export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
+export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPause }) {
   const [phase, setPhase] = useState("start"); // 'start' | 'playing' | 'over'
+
+  // Tell App to pause background music only during the active "playing" phase.
+  // start/over screens are menus where music should continue. Cleanup on
+  // unmount ensures music resumes if the user navigates away mid-round.
+  useEffect(() => {
+    if (onMusicPause) onMusicPause(phase === "playing");
+    return () => { if (onMusicPause) onMusicPause(false); };
+  }, [phase, onMusicPause]);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(1);
   const [lives, setLives] = useState(LIVES_START);

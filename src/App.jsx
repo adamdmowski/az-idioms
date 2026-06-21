@@ -265,6 +265,16 @@ function readMuted() {
 function readMusicOff() {
   try { return localStorage.getItem("azidioms_music_off") === "1"; } catch (_) { return false; }
 }
+// Audio-volume range: 0..0.5 (capped so music never overpowers TTS).
+// Stored as the raw audio.volume value, not a slider percent.
+function readMusicVolume() {
+  try {
+    const raw = localStorage.getItem("azidioms_music_volume");
+    const n = parseFloat(raw);
+    if (!Number.isFinite(n)) return 0.3;
+    return Math.max(0, Math.min(0.5, n));
+  } catch (_) { return 0.3; }
+}
 
 // ─── Sub-components ──────────────────────────
 
@@ -1490,8 +1500,23 @@ export default function App() {
   });
   const [muted, setMuted] = useState(readMuted);
   const [musicOff, setMusicOff] = useState(readMusicOff);
+  const [musicVolume, setMusicVolume] = useState(readMusicVolume);
+  const [musicPause, setMusicPause] = useState(false);   // true while a game is actively being played
+  const [musicPopupOpen, setMusicPopupOpen] = useState(false);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
   const [cutouts, setCutouts] = useState([]);
+
+  // Persist musicOff / musicVolume changes alongside the state setter.
+  useEffect(() => {
+    try { localStorage.setItem("azidioms_music_off", musicOff ? "1" : "0"); } catch (_) { /* ignore */ }
+  }, [musicOff]);
+  useEffect(() => {
+    try { localStorage.setItem("azidioms_music_volume", String(musicVolume)); } catch (_) { /* ignore */ }
+    // Live-update audio.volume while the slider drags so the change is heard
+    // immediately without restarting playback.
+    const audio = musicRef.current;
+    if (audio) audio.volume = musicVolume;
+  }, [musicVolume]);
 
   // Open the learning-window modal for a specific idiom (used by landing zone taps)
   const openZoneIdiom = useCallback((id) => {
@@ -1563,18 +1588,28 @@ export default function App() {
     });
   }, []);
 
-  // ─── Background music (landing only) ───────
+  // ─── Background music ───────
+  // Music plays on every menu / browse screen. It pauses only when:
+  //   - the main mute toggle is on
+  //   - the dedicated music toggle is off
+  //   - a learning-window modal is open
+  //   - any game is in active-play mode (musicPause set by the game component)
   const musicRef = useRef(null);
   const musicStartedRef = useRef(false);
   const musicFadeRafRef = useRef(null);
-  // Keep refs in sync so the one-time interaction listener reads current state.
+  // Keep refs in sync so the one-time interaction listener + applyMusicState
+  // always read the current state without re-creating callbacks.
   const pageRef = useRef(page);
   const mutedRef = useRef(muted);
   const musicOffRef = useRef(musicOff);
+  const musicPauseRef = useRef(musicPause);
+  const musicVolumeRef = useRef(musicVolume);
   const learningOpenRef = useRef(learningIdiomId != null);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => { musicOffRef.current = musicOff; }, [musicOff]);
+  useEffect(() => { musicPauseRef.current = musicPause; }, [musicPause]);
+  useEffect(() => { musicVolumeRef.current = musicVolume; }, [musicVolume]);
   useEffect(() => { learningOpenRef.current = learningIdiomId != null; }, [learningIdiomId]);
 
   const fadeMusicTo = useCallback((target, duration) => {
@@ -1600,19 +1635,17 @@ export default function App() {
     const audio = musicRef.current;
     const muted = mutedRef.current;
     const musicOff = musicOffRef.current;
-    const page = pageRef.current;
+    const musicPause = musicPauseRef.current;
     const learningOpen = learningOpenRef.current;
     if (!audio) return;
-    // Pause whenever music can't / shouldn't be heard:
-    //   - main mute or dedicated music toggle off
-    //   - not on the landing page (Catch/Quiz/Fame all silence music)
-    //   - a learning window is open (iOS Safari ignores volume changes on
-    //     <audio>, so we hard-pause instead of fading down)
-    if (muted || musicOff || page !== "landing" || learningOpen) {
+    // Pause whenever music can't / shouldn't be heard. The page itself is no
+    // longer a gate — only active gameplay (musicPause) and explicit toggles
+    // can silence music.
+    if (muted || musicOff || musicPause || learningOpen) {
       audio.pause();
       return;
     }
-    audio.volume = 0.3;
+    audio.volume = musicVolumeRef.current;
     try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
   }, []);
 
@@ -1689,7 +1722,7 @@ export default function App() {
   }, [applyMusicState]);
 
   // React to page / mute / music-toggle / modal changes: play, pause, or fade.
-  useEffect(() => { applyMusicState(); }, [page, muted, musicOff, learningIdiomId, applyMusicState]);
+  useEffect(() => { applyMusicState(); }, [page, muted, musicOff, musicPause, learningIdiomId, applyMusicState]);
 
   // Pause music when the tab/app is hidden (minimised, phone locked, app
   // switched away). Resume when it comes back — applyMusicState re-checks
@@ -1708,14 +1741,6 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [applyMusicState]);
 
-  const toggleMusic = useCallback(() => {
-    setMusicOff((m) => {
-      const next = !m;
-      try { localStorage.setItem("azidioms_music_off", next ? "1" : "0"); } catch (_) { /* ignore */ }
-      return next;
-    });
-  }, []);
-
   const handleNav = (p) => {
     setPage(p);
   };
@@ -1725,13 +1750,12 @@ export default function App() {
       minHeight: "100dvh",
       background: "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
     }}>
-      {/* Floating music toggle — sits to the left of the mute button.
-          Independently controls the background music. */}
+      {/* Floating music button — opens the volume / off popup. */}
       <button
-        onClick={toggleMusic}
-        aria-label={musicOff ? "Turn music on" : "Turn music off"}
-        aria-pressed={musicOff}
-        title={musicOff ? "Music off — tap to enable" : "Music on — tap to mute"}
+        onClick={() => setMusicPopupOpen((o) => !o)}
+        aria-label="Music volume controls"
+        aria-expanded={musicPopupOpen}
+        title={musicOff ? "Music off — tap to adjust" : "Music — tap to adjust"}
         className="az-tap"
         style={{
           position: "fixed",
@@ -1739,10 +1763,16 @@ export default function App() {
           right: "max(62px, calc(env(safe-area-inset-right) + 50px))",
           width: 36, height: 36,
           borderRadius: "50%",
-          background: musicOff ? "rgba(148, 163, 184, 0.30)" : "rgba(255, 255, 255, 0.10)",
+          background: musicPopupOpen
+            ? "rgba(245, 158, 11, 0.30)"
+            : musicOff
+              ? "rgba(148, 163, 184, 0.30)"
+              : "rgba(255, 255, 255, 0.10)",
           backdropFilter: "blur(10px)",
           WebkitBackdropFilter: "blur(10px)",
-          border: "1px solid rgba(255, 255, 255, 0.18)",
+          border: musicPopupOpen
+            ? "1px solid rgba(245, 158, 11, 0.55)"
+            : "1px solid rgba(255, 255, 255, 0.18)",
           color: "#fff",
           fontSize: 14,
           cursor: "pointer",
@@ -1750,12 +1780,86 @@ export default function App() {
           zIndex: 50,
           display: "inline-flex", alignItems: "center", justifyContent: "center",
           WebkitTapHighlightColor: "transparent",
-          opacity: musicOff ? 0.65 : 1,
+          opacity: musicOff && !musicPopupOpen ? 0.65 : 1,
           textDecoration: musicOff ? "line-through" : "none",
         }}
       >
         <span aria-hidden="true">🎵</span>
       </button>
+
+      {/* Volume popup. Backdrop at z-48 catches outside-clicks; popup at z-55
+          sits above the floating buttons (z-50) so the slider is interactive. */}
+      {musicPopupOpen && (
+        <>
+          <div
+            onClick={() => setMusicPopupOpen(false)}
+            style={{ position: "fixed", inset: 0, zIndex: 48 }}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-label="Music volume"
+            style={{
+              position: "fixed",
+              top: "calc(env(safe-area-inset-top, 0px) + 55px)",
+              right: "calc(env(safe-area-inset-right, 0px) + 40px)",
+              zIndex: 55,
+              background: "rgba(20, 24, 35, 0.92)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              border: "1px solid rgba(255, 255, 255, 0.18)",
+              borderRadius: 14,
+              padding: "10px 12px",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.55)",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={Math.round((musicVolume / 0.5) * 100)}
+              onChange={(e) => {
+                const sliderVal = parseInt(e.target.value, 10);
+                const vol = Math.max(0, Math.min(0.5, (sliderVal / 100) * 0.5));
+                setMusicVolume(vol);
+                // Adjusting volume implicitly re-enables music if it was off.
+                if (musicOff) setMusicOff(false);
+              }}
+              aria-label="Music volume"
+              style={{
+                width: 100,
+                accentColor: "var(--color-sun)",
+                cursor: "pointer",
+              }}
+            />
+            <button
+              onClick={() => {
+                setMusicOff(true);
+                setMusicPopupOpen(false);
+              }}
+              className="az-tap"
+              style={{
+                background: "rgba(255, 255, 255, 0.10)",
+                border: "1px solid rgba(255, 255, 255, 0.22)",
+                color: "#fff",
+                padding: "5px 11px",
+                borderRadius: 8,
+                fontFamily: "var(--font-display)",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.4px",
+                textTransform: "uppercase",
+                cursor: "pointer",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >Off</button>
+          </div>
+        </>
+      )}
 
       {/* Floating mute toggle — always accessible, hidden by Catch's playing-phase
           overlay (z-index 60) and the LearningWindow modal (z-index 100). */}
@@ -1833,6 +1937,7 @@ export default function App() {
           cutouts={cutouts}
           onBack={() => handleNav("landing")}
           onViewFame={() => handleNav("leaderboard")}
+          onMusicPause={setMusicPause}
         />
       )}
       {page === "leaderboard" && <WallOfFame onNav={handleNav} />}
@@ -1842,6 +1947,7 @@ export default function App() {
           idioms={IDIOMS}
           onBack={() => handleNav("games")}
           onViewFame={() => handleNav("leaderboard")}
+          onMusicPause={setMusicPause}
         />
       )}
       {page === "hangman" && (
@@ -1850,6 +1956,7 @@ export default function App() {
           idioms={IDIOMS}
           onBack={() => handleNav("games")}
           onViewFame={() => handleNav("leaderboard")}
+          onMusicPause={setMusicPause}
         />
       )}
 

@@ -524,8 +524,14 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
 }
 
 // ─── Main Hangman game component ────────────────
-export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
+export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPause }) {
   const [phase, setPhase] = useState("start"); // 'start' | 'playing' | 'over'
+
+  // Tell App to pause music only during active gameplay; menus stay musical.
+  useEffect(() => {
+    if (onMusicPause) onMusicPause(phase === "playing");
+    return () => { if (onMusicPause) onMusicPause(false); };
+  }, [phase, onMusicPause]);
   const [score, setScore] = useState(0);
   const [roundIdx, setRoundIdx] = useState(0);
   const [shuffled, setShuffled] = useState([]);

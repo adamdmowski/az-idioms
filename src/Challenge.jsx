@@ -1619,8 +1619,15 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
 }
 
 // ─── Main Challenge component ──────────
-export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
+export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusicPause }) {
   const [phase, setPhase] = useState("select"); // 'select' | 'play' | 'results'
+
+  // Tell App to pause music only during active "play" phase. Select +
+  // results are menus where music should keep playing.
+  useEffect(() => {
+    if (onMusicPause) onMusicPause(phase === "play");
+    return () => { if (onMusicPause) onMusicPause(false); };
+  }, [phase, onMusicPause]);
   const [currentLevel, setCurrentLevel] = useState(null);
   const [questions, setQuestions] = useState([]);
   const [lastScore, setLastScore] = useState(0);
