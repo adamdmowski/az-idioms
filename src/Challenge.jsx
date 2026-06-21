@@ -592,7 +592,9 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       const firstTry = attempts === 0;
       if (firstTry && !inReplay) setCorrectCount((c) => c + 1);
       correctSound();
-      playForIdiom(question.idiom, "name");
+      // Hard: the kid just built the idiom themselves, so reading it back is
+      // redundant. Boss is a mixed review — audio reinforcement still helps.
+      if (level !== "hard") playForIdiom(question.idiom, "name");
       setFeedback("correct");
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(advanceQuestion, 1000);
@@ -901,7 +903,8 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                 const chip = key != null ? chipByKey(key) : null;
 
                 if (!chip) {
-                  // Empty slot — dashed placeholder.
+                  // Empty slot — dashed placeholder. Bright enough on the dark
+                  // theme that the kid can clearly count the words to fill.
                   return (
                     <span
                       key={`slot-${idx}`}
@@ -909,10 +912,9 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                       style={{
                         minWidth: 56,
                         height: 38,
-                        border: "2px dashed var(--color-line)",
+                        border: "2px dashed rgba(255, 255, 255, 0.35)",
                         borderRadius: 999,
-                        background: "transparent",
-                        opacity: 0.6,
+                        background: "rgba(255, 255, 255, 0.08)",
                       }}
                     />
                   );
