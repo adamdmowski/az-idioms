@@ -118,6 +118,35 @@ button { font-family: inherit; }
   to   { opacity: 0; transform: translateY(28px) scale(0.97); }
 }
 
+/* On narrow screens, header nav collapses to icons + aria-label only */
+@media (max-width: 460px) {
+  .az-nav-label { display: none; }
+  .az-nav-logo-sub { display: none; }
+}
+
+/* ─── Catch game animations ─────────────── */
+@keyframes catch-pop-correct {
+  0%   { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
+  35%  { transform: scale(1.22); filter: drop-shadow(0 0 14px rgba(22, 163, 74, 0.95)) brightness(1.12); }
+  100% { transform: scale(0.2); opacity: 0; filter: drop-shadow(0 0 0 transparent); }
+}
+.catch-pop-correct { animation: catch-pop-correct 600ms var(--ease-spring) both; }
+
+@keyframes catch-shake-wrong {
+  0%, 100% { transform: translateX(0); filter: none; }
+  15%      { transform: translateX(-7px); filter: drop-shadow(0 0 10px rgba(220, 38, 38, 0.8)) hue-rotate(-15deg); }
+  30%      { transform: translateX(7px); }
+  50%      { transform: translateX(-5px); }
+  70%      { transform: translateX(5px); }
+  85%      { transform: translateX(-2px); }
+}
+.catch-shake-wrong { animation: catch-shake-wrong 420ms var(--ease-out) both; }
+
+@keyframes catch-confetti {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx, 0), var(--dy, 0)) rotate(540deg); opacity: 0; }
+}
+
 .az-fade-in  { animation: az-fade-in var(--dur-slow) var(--ease-out) both; }
 .az-pop-in   { animation: az-pop-in var(--dur-slow) var(--ease-spring) both; }
 .az-float    { animation: az-float 3.4s var(--ease-out) infinite; }

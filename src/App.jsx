@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import Catch from "./Catch";
 
 const IDIOMS = [
   {
@@ -273,16 +274,23 @@ function Header({ page, onNav, muted, onToggleMute }) {
             display: "block", color: "#fff", fontFamily: "var(--font-display)",
             fontWeight: 700, fontSize: 18, letterSpacing: "0.5px",
           }}>AZ IDIOMS</span>
-          <span style={{ display: "block", color: "var(--color-ink-line)", fontSize: 11, fontWeight: 600 }}>
+          <span className="az-nav-logo-sub" style={{ display: "block", color: "var(--color-ink-line)", fontSize: 11, fontWeight: 600 }}>
             English Idiom Explorer
           </span>
         </span>
       </button>
 
-      <nav style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <nav style={{
+        display: "flex",
+        alignItems: "center",
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
+        gap: 2,
+      }}>
         {[
           { p: "learn", label: "Learn", icon: "📚" },
           { p: "quiz-name", label: "Quiz", icon: "🧠" },
+          { p: "catch", label: "Catch", icon: "🎮" },
           { p: "leaderboard", label: "Top", icon: "🏆" },
         ].map(({ p, label, icon }) => {
           const isActive = page === p || (p === "quiz-name" && page.startsWith("quiz"));
@@ -292,11 +300,12 @@ function Header({ page, onNav, muted, onToggleMute }) {
               onClick={() => onNav(p)}
               className="az-tap"
               aria-current={isActive ? "page" : undefined}
+              aria-label={label}
               style={{
                 background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
                 border: "none",
                 color: "#fff",
-                padding: "8px 10px",
+                padding: "8px 9px",
                 borderRadius: 12,
                 cursor: "pointer",
                 fontSize: 13,
@@ -305,7 +314,7 @@ function Header({ page, onNav, muted, onToggleMute }) {
               }}
             >
               <span aria-hidden="true">{icon}</span>
-              <span style={{ fontFamily: "var(--font-display)" }}>{label}</span>
+              <span className="az-nav-label" style={{ fontFamily: "var(--font-display)" }}>{label}</span>
             </button>
           );
         })}
@@ -1467,7 +1476,10 @@ function LearningWindow({ initialId, cutouts, onClose }) {
 // ─── Main App ──────────────────────────
 
 export default function App() {
-  const [page, setPage] = useState("landing");
+  const [page, setPage] = useState(() => {
+    if (typeof window === "undefined") return "landing";
+    return window.location.pathname === "/catch" ? "catch" : "landing";
+  });
   const [playerName, setPlayerName] = useState("");
   const [quizScores, setQuizScores] = useState([0, 0, 0]);
   const [quizStartTime, setQuizStartTime] = useState(null);
@@ -1486,6 +1498,33 @@ export default function App() {
 
   const closeLearningWindow = useCallback(() => {
     setLearningIdiomId(null);
+  }, []);
+
+  // Keep the URL roughly in sync for the /catch deep link (Phase 6).
+  // We don't manage URLs for every page — just toggle /catch ↔ /.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pathIsCatch = window.location.pathname === "/catch";
+    if (page === "catch" && !pathIsCatch) {
+      window.history.pushState({}, "", "/catch");
+    } else if (page !== "catch" && pathIsCatch) {
+      window.history.pushState({}, "", "/");
+    }
+  }, [page]);
+
+  // Browser back/forward should switch in/out of /catch
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPop = () => {
+      const isCatch = window.location.pathname === "/catch";
+      setPage((p) => {
+        if (isCatch && p !== "catch") return "catch";
+        if (!isCatch && p === "catch") return "landing";
+        return p;
+      });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   // Fetch the cutouts manifest once; shared by Landing (interactive zones) and the modal.
@@ -1644,6 +1683,14 @@ export default function App() {
         />
       )}
       {page === "leaderboard" && <Leaderboard entries={leaderboard} onNav={handleNav} />}
+      {page === "catch" && (
+        <Catch
+          cutouts={cutouts}
+          idioms={IDIOMS}
+          speak={speak}
+          onBack={() => handleNav("landing")}
+        />
+      )}
 
       {learningIdiomId != null && (
         <LearningWindow
