@@ -239,125 +239,15 @@ function formatTime(ms) {
 
 // ─── Sub-components ──────────────────────────
 
-function Header({ page, onNav, muted, onToggleMute }) {
-  return (
-    <header style={{
-      background: "linear-gradient(135deg, var(--color-ink) 0%, var(--color-ink-soft) 100%)",
-      padding: "12px 16px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 8,
-      position: "sticky",
-      top: 0,
-      zIndex: 50,
-      boxShadow: "var(--shadow-sm)",
-    }}>
-      <button
-        onClick={() => onNav("landing")}
-        aria-label="Back to home"
-        style={{
-          background: "transparent", border: "none", cursor: "pointer",
-          display: "flex", alignItems: "center", gap: 10, padding: 4,
-        }}
-      >
-        <span
-          aria-hidden="true"
-          style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 38, height: 38, borderRadius: 12,
-            background: "linear-gradient(135deg, var(--color-sun), var(--color-coral))",
-            fontSize: 22, lineHeight: 1, boxShadow: "var(--shadow-sm)",
-          }}
-        >🎨</span>
-        <span style={{ textAlign: "left", lineHeight: 1.1 }}>
-          <span style={{
-            display: "block", color: "#fff", fontFamily: "var(--font-display)",
-            fontWeight: 700, fontSize: 18, letterSpacing: "0.5px",
-          }}>AZ IDIOMS</span>
-          <span className="az-nav-logo-sub" style={{ display: "block", color: "var(--color-ink-line)", fontSize: 11, fontWeight: 600 }}>
-            English Idiom Explorer
-          </span>
-        </span>
-      </button>
-
-      <nav style={{
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
-        justifyContent: "flex-end",
-        gap: 2,
-      }}>
-        {[
-          { p: "learn", label: "Learn", icon: "📚" },
-          { p: "quiz-name", label: "Quiz", icon: "🧠" },
-          { p: "catch", label: "Catch", icon: "🎮" },
-          { p: "leaderboard", label: "Top", icon: "🏆" },
-        ].map(({ p, label, icon }) => {
-          const isActive = page === p || (p === "quiz-name" && page.startsWith("quiz"));
-          return (
-            <button
-              key={p}
-              onClick={() => onNav(p)}
-              className="az-tap"
-              aria-current={isActive ? "page" : undefined}
-              aria-label={label}
-              style={{
-                background: isActive ? "rgba(255,255,255,0.18)" : "transparent",
-                border: "none",
-                color: "#fff",
-                padding: "8px 9px",
-                borderRadius: 12,
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: isActive ? 700 : 600,
-                display: "inline-flex", alignItems: "center", gap: 4,
-              }}
-            >
-              <span aria-hidden="true">{icon}</span>
-              <span className="az-nav-label" style={{ fontFamily: "var(--font-display)" }}>{label}</span>
-            </button>
-          );
-        })}
-        <button
-          onClick={onToggleMute}
-          aria-label={muted ? "Unmute sound" : "Mute sound"}
-          aria-pressed={muted}
-          title={muted ? "Sound off — tap to enable" : "Sound on — tap to mute"}
-          className="az-tap"
-          style={{
-            marginLeft: 4,
-            background: muted ? "rgba(239, 111, 92, 0.25)" : "rgba(255,255,255,0.18)",
-            border: muted ? "1px solid rgba(239, 111, 92, 0.6)" : "1px solid rgba(255,255,255,0.25)",
-            color: "#fff", cursor: "pointer",
-            width: 38, height: 38, borderRadius: 12,
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18,
-          }}
-        >
-          <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span>
-        </button>
-      </nav>
-    </header>
-  );
-}
-
 function Landing({ onNav, onZone, cutouts, isModalOpen }) {
-  const buttons = [
-    { p: "learn",        icon: "📚", label: "Learn the Idioms", sub: "Flip through all 14, with audio",
-      gradient: "linear-gradient(135deg, #22C55E, #16A34A)", shadow: "var(--shadow-glow-leaf)" },
-    { p: "quiz-name",    icon: "🧠", label: "Take the Quiz",    sub: "3 rounds · race the clock",
+  const iconButtons = [
+    { p: "catch",       icon: "🎮", label: "Catch",
       gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)", shadow: "var(--shadow-glow-coral)" },
-    { p: "leaderboard",  icon: "🏆", label: "Wall of Fame",     sub: "See the top idiom masters",
+    { p: "quiz-name",   icon: "🧠", label: "Quiz",
+      gradient: "linear-gradient(135deg, #22C55E, #16A34A)", shadow: "var(--shadow-glow-leaf)" },
+    { p: "leaderboard", icon: "🏆", label: "Fame",
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)", shadow: "var(--shadow-glow-sun)" },
   ];
-
-  // Title shrinks from celebratory to compact after the entrance
-  const [titleBig, setTitleBig] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setTitleBig(false), 2200);
-    return () => clearTimeout(t);
-  }, []);
 
   // Debug calibration mode — append ?debug=zones to URL
   const debug = typeof window !== "undefined"
@@ -426,58 +316,37 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
   // Dim base illustration whenever an explicit interaction is happening.
   const dimBase = hoveredId != null || tappedId != null;
 
-  const activeIdiom = (() => {
-    const id = tappedId ?? hoveredId;
-    if (id == null) return null;
-    return cutouts.find((c) => c.id === id)?.idiom ?? null;
-  })();
-
   return (
     <main
       className="az-fade-in"
       style={{
         textAlign: "center",
-        padding: "20px 14px 40px",
-        maxWidth: 560,
+        padding: "12px 10px 28px",
+        maxWidth: 760,
         margin: "0 auto",
       }}
     >
-      <h1
-        style={{
-          fontFamily: "var(--font-display)",
-          fontSize: titleBig ? "clamp(28px, 8vw, 40px)" : "clamp(18px, 4.6vw, 22px)",
-          fontWeight: 700,
-          color: "var(--color-ink)",
-          margin: titleBig ? "6px 0 8px" : "2px 0 4px",
-          transition: "font-size 700ms var(--ease-spring), margin 700ms var(--ease-out)",
-          lineHeight: 1.1,
-        }}
-      >
-        <span className="az-pop-in" style={{ display: "inline-block" }}>
-          🎉 You Found the Secret!
-        </span>
-      </h1>
-      <p
-        style={{
-          color: "var(--color-muted)",
-          fontSize: 13.5,
-          maxWidth: 420,
-          margin: "0 auto 14px",
-          lineHeight: 1.5,
-          fontWeight: 600,
-        }}
-      >
-        Tap a character to discover its idiom — <strong style={{ color: "var(--color-ink)" }}>14 hidden</strong> in the picture.
-      </p>
+      {/* Tiny wordmark — branding without dominance */}
+      <div style={{
+        fontFamily: "var(--font-display)",
+        fontSize: 12,
+        fontWeight: 700,
+        color: "var(--color-ink)",
+        letterSpacing: "2.5px",
+        opacity: 0.5,
+        marginBottom: 6,
+      }}>
+        AZ IDIOMS
+      </div>
 
       {/* The interactive illustration ─────────────────────────────────── */}
       <div
         style={{
           position: "relative",
           width: "100%",
-          maxWidth: "min(94vw, 520px)",
+          maxWidth: "min(95vw, 700px)",
           aspectRatio: "1 / 1",
-          margin: "0 auto 22px",
+          margin: "0 auto",
           touchAction: "manipulation",
         }}
       >
@@ -577,87 +446,56 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
           );
         })}
 
-        {/* Hint bubble — shows idiom name when active, prompt otherwise */}
-        {!debug && cutouts.length > 0 && (
-          <div
-            aria-hidden="true"
-            style={{
-              position: "absolute",
-              left: "50%",
-              bottom: -10,
-              transform: "translate(-50%, 100%)",
-              background: activeIdiom ? "var(--color-sun-deep)" : "var(--color-ink)",
-              color: "#fff",
-              fontFamily: "var(--font-display)",
-              fontSize: 13,
-              fontWeight: 700,
-              padding: "6px 14px",
-              borderRadius: 999,
-              boxShadow: "var(--shadow-sm)",
-              whiteSpace: "nowrap",
-              opacity: 0.95,
-              pointerEvents: "none",
-              maxWidth: "92%",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              transition: "background 180ms var(--ease-out)",
-            }}
-          >
-            {activeIdiom ? `${activeIdiom} →` : "👀 Look closely — tap any character"}
-          </div>
-        )}
       </div>
 
       {debug && (
-        <p style={{ fontSize: 11, color: "var(--color-muted)", margin: "0 auto 14px", maxWidth: 420 }}>
+        <p style={{ fontSize: 11, color: "var(--color-muted)", margin: "10px auto 0", maxWidth: 420 }}>
           🛠️ Debug mode. Edit <code>public/cutouts/manifest.json</code> and reload. Remove <code>?debug=zones</code> to exit.
         </p>
       )}
 
-      {/* CTA buttons ───────────────────────────────────────────────── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 340, margin: "0 auto" }}>
-        {buttons.map(({ p, icon, label, sub, gradient, shadow }) => (
+      {/* Compact icon buttons — app-icon style */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(3, 1fr)",
+        gap: 10,
+        maxWidth: 380,
+        margin: "18px auto 0",
+      }}>
+        {iconButtons.map(({ p, icon, label, gradient, shadow }) => (
           <button
             key={p}
             onClick={() => onNav(p)}
             className="az-tap"
+            aria-label={label}
             style={{
               background: gradient,
               color: "#fff",
               border: "none",
-              padding: "14px 18px",
-              borderRadius: "var(--r-lg)",
+              borderRadius: 18,
+              padding: "10px 6px",
               cursor: "pointer",
               boxShadow: shadow,
-              display: "flex", alignItems: "center", gap: 12,
-              textAlign: "left",
-              minHeight: 62,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 4,
+              minHeight: 80,
             }}
           >
-            <span aria-hidden="true" style={{
-              fontSize: 28, width: 40, height: 40, flexShrink: 0,
-              display: "inline-flex", alignItems: "center", justifyContent: "center",
-              background: "rgba(255,255,255,0.22)",
-              borderRadius: 12,
-            }}>{icon}</span>
-            <span style={{ flex: 1, lineHeight: 1.2 }}>
-              <span style={{
-                display: "block",
-                fontFamily: "var(--font-display)",
-                fontSize: 17, fontWeight: 700, letterSpacing: "0.2px",
-              }}>{label}</span>
-              <span style={{
-                display: "block",
-                fontSize: 11.5, fontWeight: 600,
-                opacity: 0.88, marginTop: 2,
-              }}>{sub}</span>
-            </span>
-            <span aria-hidden="true" style={{ fontSize: 20, opacity: 0.9 }}>›</span>
+            <span aria-hidden="true" style={{ fontSize: 30, lineHeight: 1 }}>{icon}</span>
+            <span style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 13.5,
+              fontWeight: 700,
+              letterSpacing: "0.2px",
+            }}>{label}</span>
           </button>
         ))}
       </div>
 
-      <p style={{ color: "var(--color-muted)", fontSize: 12, marginTop: 28, fontWeight: 600 }}>
+      <p style={{ color: "var(--color-muted)", fontSize: 11.5, marginTop: 22, fontWeight: 600 }}>
         AZ English School · Świdnik
       </p>
     </main>
@@ -1834,7 +1672,66 @@ export default function App() {
       minHeight: "100dvh",
       background: "linear-gradient(180deg, var(--color-cream) 0%, var(--color-paper) 60%, #EAF4FF 100%)",
     }}>
-      <Header page={page} onNav={handleNav} muted={muted} onToggleMute={toggleMute} />
+      {/* Floating mute toggle — always accessible, hidden by Catch's playing-phase
+          overlay (z-index 60) and the LearningWindow modal (z-index 100). */}
+      <button
+        onClick={toggleMute}
+        aria-label={muted ? "Unmute sound" : "Mute sound"}
+        aria-pressed={muted}
+        title={muted ? "Sound off — tap to enable" : "Sound on — tap to mute"}
+        className="az-tap"
+        style={{
+          position: "fixed",
+          top: "max(12px, env(safe-area-inset-top))",
+          right: "max(12px, env(safe-area-inset-right))",
+          width: 42, height: 42,
+          borderRadius: "50%",
+          background: muted ? "rgba(239, 111, 92, 0.95)" : "rgba(255, 255, 255, 0.85)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          border: muted ? "1px solid rgba(239, 111, 92, 0.7)" : "1px solid rgba(255, 255, 255, 0.7)",
+          color: muted ? "#fff" : "var(--color-ink)",
+          fontSize: 18,
+          cursor: "pointer",
+          boxShadow: "0 4px 12px rgba(15, 23, 42, 0.18)",
+          zIndex: 40,
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span>
+      </button>
+
+      {/* Floating Home button on non-landing pages — pairs with the mute toggle */}
+      {page !== "landing" && (
+        <button
+          onClick={() => handleNav("landing")}
+          aria-label="Back to home"
+          className="az-tap"
+          style={{
+            position: "fixed",
+            top: "max(12px, env(safe-area-inset-top))",
+            left: "max(12px, env(safe-area-inset-left))",
+            height: 42,
+            padding: "0 14px",
+            borderRadius: 999,
+            background: "rgba(255, 255, 255, 0.88)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            border: "1px solid rgba(255, 255, 255, 0.7)",
+            color: "var(--color-ink)",
+            fontFamily: "var(--font-display)",
+            fontWeight: 700, fontSize: 14,
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(15, 23, 42, 0.18)",
+            zIndex: 40,
+            display: "inline-flex", alignItems: "center", gap: 6,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          <span aria-hidden="true">←</span> Home
+        </button>
+      )}
 
       {page === "landing" && (
         <Landing

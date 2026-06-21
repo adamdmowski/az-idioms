@@ -118,12 +118,6 @@ button { font-family: inherit; }
   to   { opacity: 0; transform: translateY(28px) scale(0.97); }
 }
 
-/* On narrow screens, header nav collapses to icons + aria-label only */
-@media (max-width: 460px) {
-  .az-nav-label { display: none; }
-  .az-nav-logo-sub { display: none; }
-}
-
 /* ─── Catch game animations ─────────────── */
 @keyframes catch-pop-correct {
   0%   { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
