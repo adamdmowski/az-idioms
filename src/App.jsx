@@ -1264,7 +1264,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
           }}>
             {cutout ? (
               <img
-                src={`/cutouts/${cutout.file}`}
+                src={`/characters/${cutout.file}`}
                 alt={current.name}
                 draggable={false}
                 style={{
