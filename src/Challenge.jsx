@@ -339,7 +339,7 @@ function LevelSelect({ progress, onPickLevel, onResetProgress }) {
 }
 
 // ─── 2×2 Image Grid (used for name and meaning questions) ──────────
-function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, showLabels }) {
+function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, showLabels, showSpeakers }) {
   return (
     <div style={{
       display: "grid",
@@ -363,8 +363,8 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, sho
           extraClass = "catch-shake-wrong";
         }
         return (
+          <div key={idiom.id} style={{ position: "relative" }}>
           <button
-            key={idiom.id}
             onClick={() => onPick(idiom)}
             disabled={disabled}
             aria-label={idiom.name}
@@ -372,6 +372,7 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, sho
             style={{
               aspectRatio: "1 / 1",
               minHeight: 140,
+              width: "100%",
               background: bg,
               border,
               borderRadius: 20,
@@ -431,6 +432,42 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, sho
               </span>
             )}
           </button>
+          {showSpeakers && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                playForIdiom(idiom, "name");
+              }}
+              aria-label={`Hear "${idiom.name}"`}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8,
+                width: 30,
+                height: 30,
+                borderRadius: "50%",
+                background: "rgba(15, 23, 42, 0.70)",
+                backdropFilter: "blur(6px)",
+                WebkitBackdropFilter: "blur(6px)",
+                border: "1px solid rgba(255, 255, 255, 0.22)",
+                color: "#fff",
+                fontSize: 14,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 0,
+                lineHeight: 1,
+                boxShadow: "0 2px 6px rgba(0, 0, 0, 0.45)",
+                WebkitTapHighlightColor: "transparent",
+                zIndex: 2,
+              }}
+            >
+              <span aria-hidden="true">🔊</span>
+            </button>
+          )}
+          </div>
         );
       })}
     </div>
@@ -481,12 +518,13 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     setLockedSlots(new Set());
     if (!question) return;
 
-    // Auto-read the prompt at the START of each question — Easy + Medium only.
-    // (Hard fill questions and Boss are intentionally not auto-read.)
+    // Auto-read the Easy-level name prompt here. Medium meaning audio is
+    // intentionally NOT auto-read from this useEffect — iOS Chrome won't
+    // play audio that originates after a render commit. Medium meaning is
+    // instead triggered synchronously from the user-gesture path (the level
+    // Play button and handlePickImage's correct-tap).
     if (level === "easy" && question.type === "name") {
       playForIdiom(question.idiom, "name");
-    } else if (level === "medium" && question.type === "meaning") {
-      playForIdiom(question.idiom, "meaning");
     }
   }, [questionIdx, question?.type, question?.idiom?.id, level]);
 
@@ -508,6 +546,12 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
           setInReplay(true);
           setActiveQuestions(missedQuestions);
           setQuestionIdx(0);
+          // Same iOS-friendly pattern: trigger the first replay question's
+          // meaning audio from this gesture-rooted timer rather than from
+          // the post-render useEffect.
+          if (level === "medium" && missedQuestions[0]?.type === "meaning") {
+            setTimeout(() => playForIdiom(missedQuestions[0].idiom, "meaning"), 50);
+          }
         }, 1200);
       } else {
         onComplete(correctCountRef.current);
@@ -530,6 +574,16 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       // Easy + Medium have already auto-read the prompt at the start of the
       // question, so skip the redundant post-tap audio. Boss keeps it.
       if (level === "boss") playForIdiom(question.idiom, "name");
+      // Medium: queue the NEXT question's meaning audio inside this user-
+      // gesture stack so iOS Chrome will actually play it. The useEffect-
+      // based auto-read runs after render commit and iOS treats it as out-
+      // of-gesture.
+      if (level === "medium" && !isLast) {
+        const nextQ = activeQuestions[questionIdx + 1];
+        if (nextQ?.type === "meaning") {
+          setTimeout(() => playForIdiom(nextQ.idiom, "meaning"), 50);
+        }
+      }
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 800);
     } else {
@@ -874,6 +928,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
             disabled={feedback === "correct"}
             onPick={handlePickImage}
             showLabels={level === "medium"}
+            showSpeakers={level === "medium" && question.type === "meaning"}
           />
         )}
 
@@ -1573,9 +1628,17 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
 
   const startLevel = useCallback((levelId) => {
     getAudioCtx(); // initialize audio inside the user-gesture (tap)
+    const qs = generateQuestions(levelId, idioms);
     setCurrentLevel(levelId);
-    setQuestions(generateQuestions(levelId, idioms));
+    setQuestions(qs);
     setPhase("play");
+    // Medium first-question auto-read must originate from this tap (the
+    // level-Play button) so iOS Chrome plays it. A useEffect inside LevelPlay
+    // would fire after the next render commit, which iOS treats as out-of-
+    // gesture and silently blocks.
+    if (levelId === "medium" && qs[0]?.type === "meaning") {
+      setTimeout(() => playForIdiom(qs[0].idiom, "meaning"), 50);
+    }
   }, [idioms]);
 
   const handleComplete = useCallback((score) => {
