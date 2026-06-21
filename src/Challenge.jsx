@@ -1,6 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
-import { playForIdiom, cancelAudio } from "./audio";
+import { playForIdiom, cancelAudio, speakText } from "./audio";
+
+// Polish meaning translations — used by the Medium level's "Pokaż po polsku"
+// reveal toggle. Keyed by 2-digit idiom id.
+const MEANING_PL = {
+  "01": "Pada bardzo mocno.",
+  "02": "Coś, co nigdy się nie stanie.",
+  "03": "Być bardzo szczęśliwym.",
+  "04": "Poczekaj chwilę, nie spiesz się.",
+  "05": "Robienie wielkiego zamieszania o coś małego.",
+  "06": "Rzucić nawyk nagle i całkowicie.",
+  "07": "Duży, oczywisty problem, o którym nikt nie mówi.",
+  "08": "Bardzo spokojny i opanowany, nawet w trudnej sytuacji.",
+  "09": "Wygadać się, często przez przypadek.",
+  "10": "Zdradzić tajemnicę.",
+  "11": "Mówi się do kogoś, kto jest cicho i nie chce mówić.",
+  "12": "Powodzenia! — szczególnie przed występem.",
+  "13": "Nagle stchórzyć i zrezygnować z czegoś zaplanowanego.",
+  "14": "Coś bardzo łatwego do zrobienia.",
+};
 
 // ─── Constants ──────────────────────────
 const PROGRESS_KEY = "azidioms_challenge_progress";
@@ -325,7 +344,7 @@ function LevelSelect({ progress, onPickLevel, onResetProgress }) {
 }
 
 // ─── 2×2 Image Grid (used for name and meaning questions) ──────────
-function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick }) {
+function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick, showLabels }) {
   return (
     <div style={{
       display: "grid",
@@ -364,8 +383,10 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick }) {
               cursor: disabled ? "default" : "pointer",
               padding: 10,
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
+              gap: 4,
               overflow: "hidden",
               boxShadow: "var(--shadow-sm)",
               transition: "border-color 180ms var(--ease-out), background 180ms var(--ease-out), transform 200ms var(--ease-spring)",
@@ -373,23 +394,46 @@ function ImageGrid({ options, cutouts, pickedId, feedback, disabled, onPick }) {
               WebkitTapHighlightColor: "transparent",
             }}
           >
-            {cutout ? (
-              <img
-                src={`/characters/${cutout.file}`}
-                alt=""
-                draggable={false}
-                style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  objectFit: "contain",
-                  filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.12))",
-                  pointerEvents: "none",
-                  userSelect: "none",
-                  WebkitUserSelect: "none",
-                }}
-              />
-            ) : (
-              <span aria-hidden="true" style={{ fontSize: 48 }}>{idiom.emoji}</span>
+            <div style={{
+              flex: 1,
+              minHeight: 0,
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}>
+              {cutout ? (
+                <img
+                  src={`/characters/${cutout.file}`}
+                  alt=""
+                  draggable={false}
+                  style={{
+                    maxWidth: "100%",
+                    maxHeight: "100%",
+                    objectFit: "contain",
+                    filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.12))",
+                    pointerEvents: "none",
+                    userSelect: "none",
+                    WebkitUserSelect: "none",
+                  }}
+                />
+              ) : (
+                <span aria-hidden="true" style={{ fontSize: 48 }}>{idiom.emoji}</span>
+              )}
+            </div>
+            {showLabels && (
+              <span style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: "var(--color-ink)",
+                lineHeight: 1.15,
+                textAlign: "center",
+                width: "100%",
+                overflowWrap: "break-word",
+              }}>
+                {idiom.name}
+              </span>
             )}
           </button>
         );
@@ -407,6 +451,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | null
   const [typed, setTyped] = useState("");
   const [revealed, setRevealed] = useState(false);
+  const [showPL, setShowPL] = useState(false); // Medium-level Polish reveal toggle
   // Replay loop — review missed questions before showing results
   const [activeQuestions, setActiveQuestions] = useState(questions);
   const [missedQuestions, setMissedQuestions] = useState([]);
@@ -428,12 +473,23 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     setFeedback(null);
     setTyped("");
     setRevealed(false);
+    setShowPL(false);
+    if (!question) return;
+
+    // Auto-read the prompt at the START of each question — Easy + Medium only.
+    // (Hard fill questions and Boss are intentionally not auto-read.)
+    if (level === "easy" && question.type === "name") {
+      playForIdiom(question.idiom, "name");
+    } else if (level === "medium" && question.type === "meaning") {
+      speakText(question.idiom.meaning);
+    }
+
     // Autofocus the fill input on Hard / Boss fill questions
-    if (question && question.type === "fill") {
+    if (question.type === "fill") {
       const t = setTimeout(() => { if (fillInputRef.current) fillInputRef.current.focus(); }, 60);
       return () => clearTimeout(t);
     }
-  }, [questionIdx, question?.type]);
+  }, [questionIdx, question?.type, level]);
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -472,7 +528,9 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       // Only the original (non-replay) run contributes to the score
       if (firstTry && !inReplay) setCorrectCount((c) => c + 1);
       correctSound();
-      playForIdiom(question.idiom, "name");
+      // Easy + Medium have already auto-read the prompt at the start of the
+      // question, so skip the redundant post-tap audio. Boss keeps it.
+      if (level === "boss") playForIdiom(question.idiom, "name");
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 800);
     } else {
@@ -656,16 +714,90 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
             }}>
               {question.type === "name" ? "Which one is…" : "What does it mean?"}
             </div>
-            <h2 style={{
-              fontFamily: "var(--font-display)",
-              fontSize: "clamp(20px, 5.5vw, 26px)",
-              color: "var(--color-ink)",
-              textAlign: "center",
-              margin: "0 0 20px",
-              lineHeight: 1.25,
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 10,
+              margin: "0 auto 8px",
+              maxWidth: 480,
             }}>
-              {question.type === "meaning" ? `"${promptText}"` : promptText}
-            </h2>
+              <h2 style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "clamp(20px, 5.5vw, 26px)",
+                color: "var(--color-ink)",
+                textAlign: "center",
+                margin: 0,
+                lineHeight: 1.25,
+                flex: "0 1 auto",
+              }}>
+                {question.type === "meaning" ? `"${promptText}"` : promptText}
+              </h2>
+              {(level === "easy" || level === "medium") && (
+                <button
+                  onClick={() => {
+                    if (question.type === "name") playForIdiom(question.idiom, "name");
+                    else speakText(question.idiom.meaning);
+                  }}
+                  aria-label="Replay prompt"
+                  className="az-tap"
+                  style={{
+                    flexShrink: 0,
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))",
+                    color: "#fff",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 16,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "var(--shadow-sm)",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >🔊</button>
+              )}
+            </div>
+            {level === "medium" && question.type === "meaning" && (
+              <div style={{ textAlign: "center", marginBottom: 18 }}>
+                <button
+                  onClick={() => setShowPL((v) => !v)}
+                  className="az-tap"
+                  aria-pressed={showPL}
+                  style={{
+                    background: showPL ? "rgba(245, 158, 11, 0.15)" : "transparent",
+                    border: "1px solid var(--color-line)",
+                    color: "var(--color-muted)",
+                    padding: "5px 12px",
+                    borderRadius: 999,
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 700,
+                    fontSize: 12,
+                    cursor: "pointer",
+                    WebkitTapHighlightColor: "transparent",
+                  }}
+                >🇵🇱 {showPL ? "Ukryj polski" : "Pokaż po polsku"}</button>
+                {showPL && MEANING_PL[String(question.idiom.id).padStart(2, "0")] && (
+                  <p style={{
+                    marginTop: 8,
+                    color: "var(--color-muted)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    fontStyle: "italic",
+                    maxWidth: 460,
+                    marginInline: "auto",
+                    lineHeight: 1.45,
+                  }}>
+                    "{MEANING_PL[String(question.idiom.id).padStart(2, "0")]}"
+                  </p>
+                )}
+              </div>
+            )}
+            {!(level === "medium" && question.type === "meaning") && (
+              <div style={{ marginBottom: 12 }} />
+            )}
           </>
         )}
 
@@ -703,6 +835,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
             feedback={feedback}
             disabled={feedback === "correct"}
             onPick={handlePickImage}
+            showLabels={level === "medium"}
           />
         )}
 

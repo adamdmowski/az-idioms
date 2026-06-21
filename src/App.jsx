@@ -367,19 +367,6 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
         margin: "0 auto",
       }}
     >
-      {/* Tiny wordmark — branding without dominance */}
-      <div style={{
-        fontFamily: "var(--font-display)",
-        fontSize: 12,
-        fontWeight: 700,
-        color: "var(--color-ink)",
-        letterSpacing: "2.5px",
-        opacity: 0.5,
-        marginBottom: 6,
-      }}>
-        AZ IDIOMS
-      </div>
-
       {/* The interactive illustration ─────────────────────────────────── */}
       <div
         style={{
@@ -536,9 +523,6 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
         ))}
       </div>
 
-      <p style={{ color: "var(--color-muted)", fontSize: 11.5, marginTop: 22, fontWeight: 600 }}>
-        AZ English School · Świdnik
-      </p>
     </main>
   );
 }

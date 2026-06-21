@@ -18,6 +18,10 @@ export function cancelAudio() {
     } catch (_) { /* ignore */ }
     _current = null;
   }
+  // Also cancel any in-flight Web Speech utterance so MP3 and TTS never overlap.
+  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+    try { window.speechSynthesis.cancel(); } catch (_) { /* ignore */ }
+  }
 }
 
 export function playAudio(filename) {
@@ -41,4 +45,29 @@ export function playForIdiom(idiom, kind = "name") {
   if (!idiom || idiom.id == null) return;
   const num = String(idiom.id).padStart(2, "0");
   playAudio(`${kind}_${num}.mp3`);
+}
+
+// Web Speech fallback for arbitrary text (used for Medium-level meanings,
+// which don't have pre-generated MP3s). Cancels any playing audio first.
+// Picks an en-GB voice when available; respects the mute toggle.
+export function speakText(text, opts = {}) {
+  cancelAudio(); // stops MP3 + any prior utterance (cancelAudio cancels both)
+  if (isMuted()) return;
+  if (typeof window === "undefined") return;
+  if (!("speechSynthesis" in window)) return;
+  try {
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = opts.lang || "en-GB";
+    utter.rate = opts.rate ?? 0.9;
+    utter.pitch = opts.pitch ?? 1;
+    const voices = window.speechSynthesis.getVoices();
+    const v =
+      voices.find((vc) => vc.lang === "en-GB") ||
+      voices.find((vc) => vc.lang && vc.lang.startsWith("en-GB")) ||
+      voices.find((vc) => vc.lang && vc.lang.startsWith("en"));
+    if (v) utter.voice = v;
+    window.speechSynthesis.speak(utter);
+  } catch (e) {
+    console.error("speakText failed", e);
+  }
 }
