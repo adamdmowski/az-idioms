@@ -222,7 +222,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
       const cleanName = trimmed.slice(0, 20);
       const { error } = await supabase
         .from("scores")
-        .insert({ name: cleanName, score });
+        .insert({ name: cleanName, score, mode: "catch" });
       if (error) throw error;
       savePlayerName(cleanName);
       setPostState("posted");

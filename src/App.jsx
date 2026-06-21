@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Catch from "./Catch";
+import Challenge from "./Challenge";
 import { supabase, supabaseConfigured } from "./supabase";
 
 const IDIOMS = [
@@ -182,11 +183,6 @@ function shuffle(arr) {
   return a;
 }
 
-function getWrongOptions(correctId, field, count = 3) {
-  const others = IDIOMS.filter((i) => i.id !== correctId);
-  return shuffle(others).slice(0, count).map((i) => i[field]);
-}
-
 // Global mute state — read by speak() so any future sound (TTS, music, SFX) respects it.
 let _muted = false;
 try {
@@ -243,7 +239,7 @@ function Landing({ onNav, onZone, cutouts, isModalOpen }) {
   const iconButtons = [
     { p: "catch",       icon: "🎮", label: "Catch",
       gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)", shadow: "var(--shadow-glow-coral)" },
-    { p: "quiz-name",   icon: "🧠", label: "Quiz",
+    { p: "quiz",        icon: "🧠", label: "Quiz",
       gradient: "linear-gradient(135deg, #22C55E, #16A34A)", shadow: "var(--shadow-glow-leaf)" },
     { p: "leaderboard", icon: "🏆", label: "Fame",
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)", shadow: "var(--shadow-glow-sun)" },
@@ -618,12 +614,12 @@ function LearnMode({ onNav, initialId }) {
           ← Previous
         </button>
         {idx === IDIOMS.length - 1 ? (
-          <button onClick={() => onNav("quiz-name")} style={{
+          <button onClick={() => onNav("quiz")} style={{
             flex: 1, padding: "14px", borderRadius: 12, border: "none",
             background: "linear-gradient(135deg, #DC2626, #B91C1C)", color: "#fff",
             fontSize: 16, fontWeight: 700, cursor: "pointer",
           }}>
-            Take the Quiz! 🧠
+            Take the Challenge 🧠
           </button>
         ) : (
           <button onClick={next} style={{
@@ -639,246 +635,6 @@ function LearnMode({ onNav, initialId }) {
   );
 }
 
-function QuizNameEntry({ onStart }) {
-  const [name, setName] = useState("");
-  return (
-    <div style={{ padding: "40px 20px", textAlign: "center", maxWidth: 400, margin: "0 auto" }}>
-      <div style={{ fontSize: 64, marginBottom: 16 }}>🧠</div>
-      <h2 style={{ fontSize: 26, fontWeight: 800, color: "#1E3A5F", margin: "0 0 8px 0" }}>Ready for the Quiz?</h2>
-      <p style={{ color: "#6B7280", fontSize: 14, marginBottom: 24, lineHeight: 1.5 }}>
-        3 rounds, 14 questions each. 42 points maximum.
-        Your time counts too — faster = higher on the leaderboard!
-      </p>
-      <div style={{ marginBottom: 8, fontSize: 13, fontWeight: 600, color: "#374151", textAlign: "left" }}>
-        Your name:
-      </div>
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Type your name..."
-        maxLength={20}
-        style={{
-          width: "100%", padding: "14px 16px", borderRadius: 12,
-          border: "2px solid #D1D5DB", fontSize: 18, outline: "none",
-          boxSizing: "border-box",
-        }}
-        onFocus={(e) => e.target.style.borderColor = "#3B82F6"}
-        onBlur={(e) => e.target.style.borderColor = "#D1D5DB"}
-      />
-      <button
-        onClick={() => name.trim() && onStart(name.trim())}
-        disabled={!name.trim()}
-        style={{
-          width: "100%", marginTop: 20, padding: "16px",
-          borderRadius: 14, border: "none", fontSize: 18, fontWeight: 700,
-          background: name.trim()
-            ? "linear-gradient(135deg, #DC2626, #B91C1C)"
-            : "#E5E7EB",
-          color: name.trim() ? "#fff" : "#9CA3AF",
-          cursor: name.trim() ? "pointer" : "default",
-          boxShadow: name.trim() ? "0 4px 14px rgba(220,38,38,0.3)" : "none",
-        }}
-      >
-        Start Quiz! 🚀
-      </button>
-    </div>
-  );
-}
-
-function QuizRound({ round, questions, onComplete }) {
-  const [qIdx, setQIdx] = useState(0);
-  const [score, setScore] = useState(0);
-  const [selected, setSelected] = useState(null);
-  const [showResult, setShowResult] = useState(false);
-
-  const q = questions[qIdx];
-
-  const roundInfo = {
-    1: { title: "Round 1: Meaning Match", subtitle: "What does this idiom mean?", color: "#3B82F6", icon: "📖" },
-    2: { title: "Round 2: Picture Hunt", subtitle: "Which idiom does this scene show?", color: "#7C3AED", icon: "🔍" },
-    3: { title: "Round 3: Fill the Gap", subtitle: "Complete the sentence!", color: "#D97706", icon: "✏️" },
-  }[round];
-
-  const handleSelect = (option) => {
-    if (showResult) return;
-    setSelected(option);
-    setShowResult(true);
-    if (option === q.correct) setScore((s) => s + 1);
-    setTimeout(() => {
-      if (qIdx + 1 < questions.length) {
-        setQIdx((i) => i + 1);
-        setSelected(null);
-        setShowResult(false);
-      } else {
-        onComplete(score + (option === q.correct ? 1 : 0));
-      }
-    }, 1200);
-  };
-
-  return (
-    <div style={{ padding: "20px", maxWidth: 480, margin: "0 auto" }}>
-      <div style={{
-        background: roundInfo.color, color: "#fff", borderRadius: 14,
-        padding: "14px 20px", marginBottom: 16, textAlign: "center",
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 600, opacity: 0.8 }}>{roundInfo.icon} {roundInfo.title}</div>
-        <div style={{ fontSize: 11, opacity: 0.7, marginTop: 2 }}>{roundInfo.subtitle}</div>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 13, color: "#6B7280", fontWeight: 600 }}>
-          Question {qIdx + 1} / {questions.length}
-        </span>
-        <span style={{ fontSize: 13, color: "#16A34A", fontWeight: 700 }}>
-          Score: {score}/{qIdx + (showResult ? 1 : 0)}
-        </span>
-      </div>
-
-      <div style={{
-        height: 5, background: "#E5E7EB", borderRadius: 3, overflow: "hidden", marginBottom: 20,
-      }}>
-        <div style={{
-          height: "100%", width: `${((qIdx + (showResult ? 1 : 0)) / questions.length) * 100}%`,
-          background: roundInfo.color, borderRadius: 3, transition: "width 0.3s",
-        }} />
-      </div>
-
-      <div style={{
-        background: "#fff", borderRadius: 16, padding: "24px 20px",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.06)", marginBottom: 16,
-        border: "1px solid #F3F4F6",
-      }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1E3A5F", lineHeight: 1.4, textAlign: "center" }}>
-          {round === 1 && <><span style={{ fontSize: 32, display: "block", marginBottom: 8 }}>{q.emoji}</span>{q.prompt}</>}
-          {round === 2 && <><span style={{ fontSize: 14, fontWeight: 400, color: "#6B7280", display: "block", marginBottom: 8 }}>In the t-shirt illustration you can see:</span>"{q.prompt}"</>}
-          {round === 3 && <div style={{ fontSize: 16 }}>{q.prompt}</div>}
-        </div>
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {q.options.map((opt, i) => {
-          let bg = "#fff";
-          let border = "2px solid #E5E7EB";
-          let color = "#374151";
-          if (showResult) {
-            if (opt === q.correct) {
-              bg = "#DCFCE7"; border = "2px solid #16A34A"; color = "#15803D";
-            } else if (opt === selected && opt !== q.correct) {
-              bg = "#FEE2E2"; border = "2px solid #DC2626"; color = "#DC2626";
-            }
-          } else if (opt === selected) {
-            bg = "#EFF6FF"; border = "2px solid #3B82F6";
-          }
-          return (
-            <button
-              key={i}
-              onClick={() => handleSelect(opt)}
-              style={{
-                background: bg, border, color, padding: "14px 16px",
-                borderRadius: 12, fontSize: 15, fontWeight: 500,
-                cursor: showResult ? "default" : "pointer",
-                textAlign: "left", transition: "all 0.2s",
-                lineHeight: 1.4,
-              }}
-            >
-              {showResult && opt === q.correct && "✅ "}
-              {showResult && opt === selected && opt !== q.correct && "❌ "}
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function Results({ name, scores, time, onNav }) {
-  const total = scores[0] + scores[1] + scores[2];
-  const max = 42;
-  const pct = Math.round((total / max) * 100);
-
-  let grade, gradeColor, gradeEmoji;
-  if (pct === 100) { grade = "IDIOM MASTER"; gradeColor = "#D97706"; gradeEmoji = "👑"; }
-  else if (pct >= 80) { grade = "Idiom Expert"; gradeColor = "#16A34A"; gradeEmoji = "🌟"; }
-  else if (pct >= 60) { grade = "Getting There"; gradeColor = "#3B82F6"; gradeEmoji = "💪"; }
-  else if (pct >= 40) { grade = "Keep Learning"; gradeColor = "#7C3AED"; gradeEmoji = "📚"; }
-  else { grade = "Just Starting"; gradeColor = "#6B7280"; gradeEmoji = "🌱"; }
-
-  return (
-    <div style={{ padding: "32px 20px", textAlign: "center", maxWidth: 420, margin: "0 auto" }}>
-      <div style={{ fontSize: 64, marginBottom: 8 }}>{gradeEmoji}</div>
-      <h2 style={{ fontSize: 28, fontWeight: 800, color: gradeColor, margin: "0 0 4px 0" }}>{grade}!</h2>
-      <p style={{ color: "#6B7280", fontSize: 14, marginBottom: 24 }}>
-        Great effort, {name}!
-      </p>
-
-      <div style={{
-        background: "#fff", borderRadius: 20, padding: 24, marginBottom: 20,
-        boxShadow: "0 4px 20px rgba(0,0,0,0.06)", border: "1px solid #F3F4F6",
-      }}>
-        <div style={{ fontSize: 52, fontWeight: 800, color: "#1E3A5F" }}>{total}<span style={{ fontSize: 24, color: "#9CA3AF" }}>/{max}</span></div>
-        <div style={{ fontSize: 14, color: "#6B7280", marginTop: 4 }}>Time: {formatTime(time)}</div>
-        <div style={{
-          height: 8, background: "#E5E7EB", borderRadius: 4, margin: "16px 0", overflow: "hidden",
-        }}>
-          <div style={{
-            height: "100%", width: `${pct}%`, borderRadius: 4,
-            background: `linear-gradient(90deg, ${gradeColor}, ${gradeColor}CC)`,
-          }} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-around", marginTop: 16 }}>
-          {[["📖 Meanings", scores[0]], ["🔍 Pictures", scores[1]], ["✏️ Fill Gaps", scores[2]]].map(([label, s]) => (
-            <div key={label}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: "#1E3A5F" }}>{s}/14</div>
-              <div style={{ fontSize: 11, color: "#9CA3AF" }}>{label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {pct === 100 && (
-        <div style={{
-          background: "linear-gradient(135deg, #FEF3C7, #FDE68A)",
-          borderRadius: 16, padding: 20, marginBottom: 20,
-          border: "2px solid #F59E0B",
-        }}>
-          <div style={{ fontSize: 32 }}>🏅</div>
-          <div style={{ fontWeight: 800, color: "#92400E", fontSize: 16 }}>
-            CERTIFICATE OF MASTERY
-          </div>
-          <div style={{ color: "#A16207", fontSize: 13, marginTop: 4 }}>
-            {name} has mastered all 14 English idioms!
-          </div>
-          <div style={{ color: "#D97706", fontSize: 11, marginTop: 8 }}>
-            AZ English School • {new Date().toLocaleDateString()}
-          </div>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <button onClick={() => onNav("leaderboard")} style={{
-          padding: "14px", borderRadius: 12, border: "none", fontSize: 16, fontWeight: 700,
-          background: "linear-gradient(135deg, #D97706, #B45309)", color: "#fff", cursor: "pointer",
-        }}>
-          🏆 See Wall of Fame
-        </button>
-        <button onClick={() => onNav("quiz-name")} style={{
-          padding: "14px", borderRadius: 12, border: "2px solid #E5E7EB",
-          fontSize: 16, fontWeight: 600, background: "#fff", color: "#374151", cursor: "pointer",
-        }}>
-          🔄 Try Again
-        </button>
-        <button onClick={() => onNav("learn")} style={{
-          padding: "14px", borderRadius: 12, border: "2px solid #E5E7EB",
-          fontSize: 16, fontWeight: 600, background: "#fff", color: "#374151", cursor: "pointer",
-        }}>
-          📚 Review Idioms
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ─── Wall of Fame (shared leaderboard via Supabase, Phase 7) ──────────
 
@@ -906,8 +662,10 @@ const MEDALS = ["🥇", "🥈", "🥉"];
 function WallOfFame({ onNav }) {
   const [status, setStatus] = useState("loading"); // 'loading'|'ok'|'error'|'unconfigured'
   const [scores, setScores] = useState([]);
+  const [activeTab, setActiveTab] = useState("catch"); // 'catch' | 'challenge'
 
-  const fetchScores = useCallback(async () => {
+  const fetchScores = useCallback(async (modeArg) => {
+    const mode = modeArg || activeTab;
     setStatus("loading");
     if (!supabaseConfigured) {
       setStatus("unconfigured");
@@ -916,7 +674,8 @@ function WallOfFame({ onNav }) {
     try {
       const { data, error } = await supabase
         .from("scores")
-        .select("id, name, score, created_at")
+        .select("id, name, score, created_at, mode")
+        .eq("mode", mode)
         .order("score", { ascending: false })
         .order("created_at", { ascending: true })
         .limit(50);
@@ -927,9 +686,9 @@ function WallOfFame({ onNav }) {
       console.error("Wall of Fame fetch failed", e);
       setStatus("error");
     }
-  }, []);
+  }, [activeTab]);
 
-  useEffect(() => { fetchScores(); }, [fetchScores]);
+  useEffect(() => { fetchScores(activeTab); }, [fetchScores, activeTab]);
 
   return (
     <main className="az-fade-in" style={{ padding: "22px 16px 44px", maxWidth: 520, margin: "0 auto" }}>
@@ -948,7 +707,7 @@ function WallOfFame({ onNav }) {
           letterSpacing: "0.3px",
         }}>🏆 Wall of Fame</h1>
         <button
-          onClick={fetchScores}
+          onClick={() => fetchScores(activeTab)}
           className="az-tap"
           aria-label="Refresh scores"
           disabled={status === "loading"}
@@ -964,6 +723,49 @@ function WallOfFame({ onNav }) {
             boxShadow: "var(--shadow-sm)",
           }}
         >↻</button>
+      </div>
+
+      {/* Mode tabs */}
+      <div role="tablist" aria-label="Game mode" style={{
+        display: "flex",
+        gap: 8,
+        marginBottom: 18,
+        background: "#fff",
+        padding: 5,
+        borderRadius: 14,
+        border: "1px solid var(--color-line)",
+      }}>
+        {[
+          { id: "catch", label: "🎮 Catch" },
+          { id: "challenge", label: "🧠 Challenge" },
+        ].map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => setActiveTab(tab.id)}
+              className="az-tap"
+              style={{
+                flex: 1,
+                background: isActive
+                  ? "linear-gradient(135deg, var(--color-ink), var(--color-ink-soft))"
+                  : "transparent",
+                color: isActive ? "#fff" : "var(--color-ink)",
+                border: "none",
+                padding: "10px 8px",
+                borderRadius: 10,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: "pointer",
+                boxShadow: isActive ? "var(--shadow-sm)" : "none",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >{tab.label}</button>
+          );
+        })}
       </div>
 
       {status === "loading" && (
@@ -1011,13 +813,15 @@ function WallOfFame({ onNav }) {
         <div style={{ textAlign: "center", padding: "40px 20px" }}>
           <div style={{ fontSize: 64, marginBottom: 10 }} aria-hidden="true">🦗</div>
           <p style={{ color: "var(--color-muted)", fontSize: 16, marginBottom: 18, fontWeight: 600 }}>
-            No scores yet — be the first! 🎮
+            No scores yet — be the first! {activeTab === "catch" ? "🎮" : "🧠"}
           </p>
           <button
-            onClick={() => onNav("catch")}
+            onClick={() => onNav(activeTab === "catch" ? "catch" : "quiz")}
             className="az-tap"
             style={{
-              background: "linear-gradient(135deg, #EF6F5C, #DC2626)",
+              background: activeTab === "catch"
+                ? "linear-gradient(135deg, #EF6F5C, #DC2626)"
+                : "linear-gradient(135deg, #F59E0B, #D97706)",
               color: "#fff",
               border: "none",
               padding: "14px 28px",
@@ -1025,9 +829,9 @@ function WallOfFame({ onNav }) {
               fontFamily: "var(--font-display)",
               fontWeight: 700, fontSize: 17,
               cursor: "pointer",
-              boxShadow: "var(--shadow-glow-coral)",
+              boxShadow: activeTab === "catch" ? "var(--shadow-glow-coral)" : "var(--shadow-glow-sun)",
             }}
-          >🎮 Play Catch</button>
+          >{activeTab === "catch" ? "🎮 Play Catch" : "🧠 Play Challenge"}</button>
         </div>
       )}
 
@@ -1134,11 +938,13 @@ function WallOfFame({ onNav }) {
 
           <div style={{ marginTop: 18 }}>
             <button
-              onClick={() => onNav("catch")}
+              onClick={() => onNav(activeTab === "catch" ? "catch" : "quiz")}
               className="az-tap"
               style={{
                 width: "100%",
-                background: "linear-gradient(135deg, #EF6F5C, #DC2626)",
+                background: activeTab === "catch"
+                  ? "linear-gradient(135deg, #EF6F5C, #DC2626)"
+                  : "linear-gradient(135deg, #F59E0B, #D97706)",
                 color: "#fff",
                 border: "none",
                 padding: "14px",
@@ -1146,9 +952,9 @@ function WallOfFame({ onNav }) {
                 fontFamily: "var(--font-display)",
                 fontWeight: 700, fontSize: 16,
                 cursor: "pointer",
-                boxShadow: "var(--shadow-glow-coral)",
+                boxShadow: activeTab === "catch" ? "var(--shadow-glow-coral)" : "var(--shadow-glow-sun)",
               }}
-            >🎮 Play Catch</button>
+            >{activeTab === "catch" ? "🎮 Play Catch" : "🧠 Play Challenge"}</button>
           </div>
         </>
       )}
@@ -1524,11 +1330,6 @@ export default function App() {
     if (typeof window === "undefined") return "landing";
     return window.location.pathname === "/catch" ? "catch" : "landing";
   });
-  const [playerName, setPlayerName] = useState("");
-  const [quizScores, setQuizScores] = useState([0, 0, 0]);
-  const [quizStartTime, setQuizStartTime] = useState(null);
-  const [quizTime, setQuizTime] = useState(0);
-  const [quizQuestions, setQuizQuestions] = useState({ r1: [], r2: [], r3: [] });
   const [muted, setMuted] = useState(isMuted());
   const [selectedIdiomId, setSelectedIdiomId] = useState(null);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
@@ -1603,68 +1404,10 @@ export default function App() {
     });
   }, []);
 
-  const generateQuiz = () => {
-    const shuffled = shuffle(IDIOMS);
-
-    const r1 = shuffled.map((idiom) => {
-      const wrong = getWrongOptions(idiom.id, "meaning");
-      return {
-        prompt: idiom.name,
-        emoji: idiom.emoji,
-        correct: idiom.meaning,
-        options: shuffle([idiom.meaning, ...wrong]),
-      };
-    });
-
-    const r2 = shuffled.map((idiom) => {
-      const wrong = getWrongOptions(idiom.id, "name");
-      return {
-        prompt: idiom.scene,
-        correct: idiom.name,
-        options: shuffle([idiom.name, ...wrong]),
-      };
-    });
-
-    const r3 = shuffled.map((idiom) => {
-      const wrong = getWrongOptions(idiom.id, "fillAnswer");
-      return {
-        prompt: idiom.fillSentence,
-        correct: idiom.fillAnswer,
-        options: shuffle([idiom.fillAnswer, ...wrong]),
-      };
-    });
-
-    setQuizQuestions({ r1, r2, r3 });
-  };
-
   const handleNav = (p) => {
-    if (p === "quiz-name") {
-      setQuizScores([0, 0, 0]);
-      setQuizTime(0);
-    }
     // Header/CTA nav always starts Learn at idiom 1; only zone-taps preserve selection.
     setSelectedIdiomId(null);
     setPage(p);
-  };
-
-  const startQuiz = (name) => {
-    setPlayerName(name);
-    generateQuiz();
-    setQuizStartTime(Date.now());
-    setPage("quiz-r1");
-  };
-
-  const completeRound = (round, score) => {
-    const newScores = [...quizScores];
-    newScores[round - 1] = score;
-    setQuizScores(newScores);
-
-    if (round < 3) {
-      setPage(`quiz-r${round + 1}`);
-    } else {
-      setQuizTime(Date.now() - quizStartTime);
-      setPage("results");
-    }
   };
 
   return (
@@ -1742,22 +1485,13 @@ export default function App() {
         />
       )}
       {page === "learn" && <LearnMode onNav={handleNav} initialId={selectedIdiomId} />}
-      {page === "quiz-name" && <QuizNameEntry onStart={startQuiz} />}
-      {page === "quiz-r1" && (
-        <QuizRound round={1} questions={quizQuestions.r1} onComplete={(s) => completeRound(1, s)} />
-      )}
-      {page === "quiz-r2" && (
-        <QuizRound round={2} questions={quizQuestions.r2} onComplete={(s) => completeRound(2, s)} />
-      )}
-      {page === "quiz-r3" && (
-        <QuizRound round={3} questions={quizQuestions.r3} onComplete={(s) => completeRound(3, s)} />
-      )}
-      {page === "results" && (
-        <Results
-          name={playerName}
-          scores={quizScores}
-          time={quizTime}
-          onNav={handleNav}
+      {page === "quiz" && (
+        <Challenge
+          idioms={IDIOMS}
+          cutouts={cutouts}
+          speak={speak}
+          onBack={() => handleNav("landing")}
+          onViewFame={() => handleNav("leaderboard")}
         />
       )}
       {page === "leaderboard" && <WallOfFame onNav={handleNav} />}
