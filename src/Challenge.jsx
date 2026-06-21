@@ -14,7 +14,7 @@ const LEVELS = [
     stars: "⭐",
     gradient: "linear-gradient(135deg, #22C55E, #16A34A)",
     glow: "var(--shadow-glow-leaf)",
-    count: 7,
+    count: 14,
   },
   {
     id: "medium",
@@ -23,7 +23,7 @@ const LEVELS = [
     stars: "⭐⭐",
     gradient: "linear-gradient(135deg, #A855F7, #7C3AED)",
     glow: "0 8px 22px rgba(124, 58, 237, 0.40)",
-    count: 7,
+    count: 14,
   },
   {
     id: "hard",
@@ -32,7 +32,7 @@ const LEVELS = [
     stars: "⭐⭐⭐",
     gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)",
     glow: "var(--shadow-glow-coral)",
-    count: 7,
+    count: 14,
   },
   {
     id: "boss",
@@ -86,8 +86,58 @@ function normalize(s) {
     .replace(/[.,!?;:'"()]/g, "")
     .replace(/\s+/g, " ");
 }
+
+// Levenshtein edit distance (1-letter typo tolerance). Two-row O(n) memory.
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = new Array(n + 1);
+  let curr = new Array(n + 1);
+  for (let j = 0; j <= n; j++) prev[j] = j;
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[n];
+}
+
+// Accepted answer variants per idiom (2-digit id key). Includes the canonical
+// taught form, sentence forms (past tense, articles), and common alternates.
+const FILL_ANSWERS = {
+  "01": ["raining cats and dogs", "it's raining cats and dogs"],
+  "02": ["when pigs fly", "pigs fly"],
+  "03": ["on cloud nine", "cloud nine"],
+  "04": ["hold your horses", "hold horses"],
+  "05": ["a storm in a teacup", "storm in a teacup"],
+  "06": ["cold turkey"],
+  "07": ["the elephant in the room", "elephant in the room"],
+  "08": ["cool as a cucumber"],
+  "09": ["spill the beans", "spilled the beans", "spilling the beans"],
+  "10": ["let the cat out of the bag", "the cat out of the bag", "cat out of the bag"],
+  "11": ["cat got your tongue", "cat got tongue"],
+  "12": ["break a leg"],
+  "13": ["cold feet", "got cold feet"],
+  "14": ["piece of cake", "a piece of cake"],
+};
+
+// Accepts a string OR an array of acceptable variants. Tolerates a single-char
+// typo / missing / extra letter against any variant.
 function answerMatches(typed, expected) {
-  return normalize(typed) === normalize(expected);
+  const t = normalize(typed);
+  if (!t) return false;
+  const list = Array.isArray(expected) ? expected : [expected];
+  for (const variant of list) {
+    const n = normalize(variant);
+    if (t === n) return true;
+    if (levenshtein(t, n) <= 1) return true;
+  }
+  return false;
 }
 function buildHint(answer) {
   return answer
@@ -132,34 +182,42 @@ function wrongSound() {
 }
 
 // ─── Question generation ──
-function generateQuestions(levelId, idioms) {
-  if (levelId === "boss") {
-    return shuffle([
-      ...generateImageQuestions("name", 3, idioms),
-      ...generateImageQuestions("meaning", 3, idioms),
-      ...generateFillQuestions(4, idioms),
-    ]);
-  }
-  if (levelId === "hard")   return generateFillQuestions(7, idioms);
-  if (levelId === "medium") return generateImageQuestions("meaning", 7, idioms);
-  return generateImageQuestions("name", 7, idioms); // easy
+function makeImageQuestion(type, idiom, idioms) {
+  const distractors = shuffle(idioms.filter((x) => x.id !== idiom.id)).slice(0, 3);
+  return { type, idiom, options: shuffle([idiom, ...distractors]) };
 }
-function generateImageQuestions(type, count, idioms) {
-  return shuffle(idioms).slice(0, count).map((idiom) => {
-    const distractors = shuffle(idioms.filter((x) => x.id !== idiom.id)).slice(0, 3);
-    return { type, idiom, options: shuffle([idiom, ...distractors]) };
-  });
-}
-function generateFillQuestions(count, idioms) {
-  return shuffle(idioms).slice(0, count).map((idiom) => ({
+
+function makeFillQuestion(idiom) {
+  const num = String(idiom.id).padStart(2, "0");
+  const variants = FILL_ANSWERS[num] || [idiom.fillAnswer || idiom.name];
+  return {
     type: "fill",
     idiom,
     sentence: idiom.fillSentence || idiom.example.replace(
       new RegExp(idiom.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"),
       "______"
     ),
-    answer: idiom.fillAnswer || idiom.name,
-  }));
+    answer: variants,           // all accepted variants
+    primaryAnswer: variants[0], // canonical form used in the hint + reveal
+  };
+}
+
+function generateQuestions(levelId, idioms) {
+  if (levelId === "boss") {
+    // 10 UNIQUE idioms; each gets one randomly-assigned question type.
+    const TYPES = ["name", "meaning", "fill"];
+    return shuffle(idioms).slice(0, 10).map((idiom) => {
+      const type = TYPES[Math.floor(Math.random() * TYPES.length)];
+      return type === "fill"
+        ? makeFillQuestion(idiom)
+        : makeImageQuestion(type, idiom, idioms);
+    });
+  }
+  // Easy / Medium / Hard now use ALL 14 idioms, shuffled.
+  const all = shuffle(idioms);
+  if (levelId === "hard")   return all.map(makeFillQuestion);
+  if (levelId === "medium") return all.map((i) => makeImageQuestion("meaning", i, idioms));
+  return all.map((i) => makeImageQuestion("name", i, idioms)); // easy
 }
 
 // ─── Level Select ──────────────────────────
@@ -709,7 +767,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                 fontWeight: 700,
                 textAlign: "center",
               }}>
-                💡 Hint: <code style={{ fontFamily: "monospace", letterSpacing: 1 }}>{buildHint(question.answer)}</code>
+                💡 Hint: <code style={{ fontFamily: "monospace", letterSpacing: 1 }}>{buildHint(question.primaryAnswer)}</code>
               </div>
             )}
             {revealed && (
@@ -724,7 +782,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                 fontWeight: 700,
                 textAlign: "center",
               }}>
-                Answer: <strong>{question.answer}</strong>
+                Answer: <strong>{question.primaryAnswer}</strong>
               </div>
             )}
           </div>
@@ -755,9 +813,10 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
 }
 
 // ─── Level Results (Easy/Medium/Hard) ──────────
-const LEVEL_PASS_THRESHOLD = 5; // out of 7 — required to unlock the next level
+const LEVEL_PASS_THRESHOLD = 10; // out of 14 — required to unlock the next level
 
-function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack }) {
+function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack, onViewFame }) {
+  const points = score * 10; // post on the same 0..(total*10) scale as Boss
   const stars =
     score === total ? "⭐⭐⭐" :
     score >= Math.ceil(total * 0.7) ? "⭐⭐" :
@@ -810,6 +869,8 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
             You got <span style={{ color: "var(--color-coral)" }}>{score}/{total}</span> right on the first try.
           </div>
         </div>
+
+        <PostScoreCard score={points} onViewFame={onViewFame} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
           <button
@@ -884,6 +945,8 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
         </div>
       </div>
 
+      <PostScoreCard score={points} onViewFame={onViewFame} />
+
       <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
         {nextDef && (
           <button
@@ -922,17 +985,10 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
   );
 }
 
-// ─── Boss Results (with post-to-Wall-of-Fame) ──────────
-const BOSS_PASS_THRESHOLD = 7; // out of 10 — required to mark the Boss as completed
-
-function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
-  // score is correctCount (0..10). Posted as score * 10 for a 0..100 scale.
-  const points = score * 10;
-  let title, emoji;
-  if (score === total)       { title = "Idiom Master!"; emoji = "👑"; }
-  else if (passed)           { title = "Almost there!"; emoji = "🌟"; }
-  else                       { title = "Almost!";       emoji = "💪"; }
-
+// ─── Shared post-to-Wall-of-Fame card (Phase 5+) ──────────
+// Used by every results screen. Returns null when Supabase isn't configured
+// so the parent doesn't need a guard.
+function PostScoreCard({ score, onViewFame }) {
   const [name, setName] = useState(loadPlayerName);
   const [postState, setPostState] = useState("idle"); // 'idle'|'posting'|'posted'|'error'
   const nameInputRef = useRef(null);
@@ -943,8 +999,10 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
     return () => clearTimeout(t);
   }, []);
 
+  if (!supabaseConfigured) return null;
+
   const trimmed = name.trim();
-  const canPost = supabaseConfigured && trimmed.length >= 2 && postState !== "posting" && postState !== "posted";
+  const canPost = trimmed.length >= 2 && postState !== "posting" && postState !== "posted";
 
   const handlePost = async () => {
     if (!canPost) return;
@@ -953,7 +1011,7 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
       const cleanName = trimmed.slice(0, 20);
       const { error } = await supabase
         .from("scores")
-        .insert({ name: cleanName, score: points, mode: "challenge" });
+        .insert({ name: cleanName, score, mode: "challenge" });
       if (error) throw error;
       savePlayerName(cleanName);
       setPostState("posted");
@@ -966,6 +1024,134 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
   const handleNameKey = (e) => {
     if (e.key === "Enter" && canPost) handlePost();
   };
+
+  return (
+    <div style={{
+      width: "100%",
+      maxWidth: 380,
+      margin: "0 auto 18px",
+      background: "#fff",
+      borderRadius: 18,
+      padding: "16px 16px 18px",
+      boxShadow: "var(--shadow-sm)",
+      textAlign: "left",
+    }}>
+      <div style={{
+        fontFamily: "var(--font-display)",
+        fontSize: 11,
+        fontWeight: 800,
+        color: "var(--color-muted)",
+        textTransform: "uppercase",
+        letterSpacing: 1.2,
+        marginBottom: 10,
+        textAlign: "center",
+      }}>
+        Share your score
+      </div>
+      {postState !== "posted" ? (
+        <>
+          <input
+            ref={nameInputRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={handleNameKey}
+            placeholder="Your name"
+            maxLength={20}
+            autoComplete="off"
+            disabled={postState === "posting"}
+            style={{
+              width: "100%",
+              padding: "12px 14px",
+              borderRadius: 12,
+              border: "2px solid var(--color-line)",
+              fontFamily: "inherit",
+              fontSize: 16,
+              outline: "none",
+              boxSizing: "border-box",
+              marginBottom: 10,
+              background: postState === "posting" ? "#F3F4F6" : "#fff",
+            }}
+            onFocus={(e) => { e.target.style.borderColor = "var(--color-sun)"; }}
+            onBlur={(e) => { e.target.style.borderColor = "var(--color-line)"; }}
+          />
+          <button
+            onClick={handlePost}
+            disabled={!canPost}
+            className="az-tap"
+            style={{
+              width: "100%",
+              background: canPost
+                ? "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))"
+                : "#E5E7EB",
+              color: canPost ? "#fff" : "#9CA3AF",
+              border: "none",
+              padding: "13px",
+              borderRadius: 14,
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: 16,
+              cursor: canPost ? "pointer" : "default",
+              boxShadow: canPost ? "var(--shadow-glow-sun)" : "none",
+              minHeight: 48,
+            }}
+          >
+            {postState === "posting" ? "Posting…" : "🏆 Post Score"}
+          </button>
+          {postState === "error" && (
+            <div style={{
+              marginTop: 10, color: "#B91C1C", fontSize: 12.5,
+              fontWeight: 700, textAlign: "center",
+            }}>Couldn't post — try again</div>
+          )}
+        </>
+      ) : (
+        <>
+          <div style={{
+            width: "100%",
+            padding: "13px",
+            borderRadius: 14,
+            background: "linear-gradient(135deg, #16A34A, #15803D)",
+            color: "#fff",
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 16,
+            textAlign: "center",
+            marginBottom: 10,
+          }}>✅ Posted!</div>
+          {onViewFame && (
+            <button
+              onClick={onViewFame}
+              className="az-tap"
+              style={{
+                width: "100%",
+                background: "transparent",
+                color: "var(--color-ink)",
+                border: "2px solid var(--color-line)",
+                padding: "11px",
+                borderRadius: 12,
+                fontFamily: "var(--font-display)",
+                fontWeight: 700, fontSize: 14,
+                cursor: "pointer",
+              }}
+            >🏆 View Wall of Fame →</button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Boss Results ──────────
+const BOSS_PASS_THRESHOLD = 7; // out of 10 — required to mark the Boss as completed
+
+function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
+  // score is correctCount (0..10). Posted as score * 10 for a 0..100 scale.
+  const points = score * 10;
+  let title, emoji;
+  if (score === total)       { title = "Idiom Master!"; emoji = "👑"; }
+  else if (passed)           { title = "Almost there!"; emoji = "🌟"; }
+  else                       { title = "Almost!";       emoji = "💪"; }
 
   return (
     <main className="az-fade-in" style={{
@@ -1028,120 +1214,7 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
         }}>Score: {points}</div>
       </div>
 
-      {supabaseConfigured && (
-        <div style={{
-          width: "100%",
-          maxWidth: 380,
-          margin: "0 auto 18px",
-          background: "#fff",
-          borderRadius: 18,
-          padding: "16px 16px 18px",
-          boxShadow: "var(--shadow-sm)",
-          textAlign: "left",
-        }}>
-          <div style={{
-            fontFamily: "var(--font-display)",
-            fontSize: 11,
-            fontWeight: 800,
-            color: "var(--color-muted)",
-            textTransform: "uppercase",
-            letterSpacing: 1.2,
-            marginBottom: 10,
-            textAlign: "center",
-          }}>
-            Share your score
-          </div>
-
-          {postState !== "posted" ? (
-            <>
-              <input
-                ref={nameInputRef}
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                onKeyDown={handleNameKey}
-                placeholder="Your name"
-                maxLength={20}
-                autoComplete="off"
-                disabled={postState === "posting"}
-                style={{
-                  width: "100%",
-                  padding: "12px 14px",
-                  borderRadius: 12,
-                  border: "2px solid var(--color-line)",
-                  fontFamily: "inherit",
-                  fontSize: 16,
-                  outline: "none",
-                  boxSizing: "border-box",
-                  marginBottom: 10,
-                  background: postState === "posting" ? "#F3F4F6" : "#fff",
-                }}
-                onFocus={(e) => { e.target.style.borderColor = "var(--color-sun)"; }}
-                onBlur={(e) => { e.target.style.borderColor = "var(--color-line)"; }}
-              />
-              <button
-                onClick={handlePost}
-                disabled={!canPost}
-                className="az-tap"
-                style={{
-                  width: "100%",
-                  background: canPost
-                    ? "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))"
-                    : "#E5E7EB",
-                  color: canPost ? "#fff" : "#9CA3AF",
-                  border: "none",
-                  padding: "13px",
-                  borderRadius: 14,
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  cursor: canPost ? "pointer" : "default",
-                  boxShadow: canPost ? "var(--shadow-glow-sun)" : "none",
-                  minHeight: 48,
-                }}
-              >
-                {postState === "posting" ? "Posting…" : "🏆 Post to Wall of Fame"}
-              </button>
-              {postState === "error" && (
-                <div style={{
-                  marginTop: 10, color: "#B91C1C", fontSize: 12.5,
-                  fontWeight: 700, textAlign: "center",
-                }}>Couldn't post — try again</div>
-              )}
-            </>
-          ) : (
-            <>
-              <div style={{
-                width: "100%",
-                padding: "13px",
-                borderRadius: 14,
-                background: "linear-gradient(135deg, #16A34A, #15803D)",
-                color: "#fff",
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontSize: 16,
-                textAlign: "center",
-                marginBottom: 10,
-              }}>✅ Posted!</div>
-              <button
-                onClick={onViewFame}
-                className="az-tap"
-                style={{
-                  width: "100%",
-                  background: "transparent",
-                  color: "var(--color-ink)",
-                  border: "2px solid var(--color-line)",
-                  padding: "11px",
-                  borderRadius: 12,
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 700, fontSize: 14,
-                  cursor: "pointer",
-                }}
-              >🏆 View Wall of Fame →</button>
-            </>
-          )}
-        </div>
-      )}
+      <PostScoreCard score={points} onViewFame={onViewFame} />
 
       <div style={{
         display: "flex", flexDirection: "column", gap: 12,
@@ -1283,11 +1356,12 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame }) {
     <LevelResults
       level={currentLevel}
       score={lastScore}
-      total={7}
+      total={14}
       passed={passed}
       onContinue={handleContinue}
       onRetry={handleRetry}
       onBack={handleBackToLevels}
+      onViewFame={onViewFame}
     />
   );
 }
