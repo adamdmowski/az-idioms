@@ -1132,8 +1132,9 @@ function LearningWindow({ initialId, cutouts, onClose }) {
         inset: 0,
         zIndex: 100,
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
+        padding: "16px",
         animation: closing
           ? "az-backdrop-out 200ms var(--ease-out) both"
           : "az-backdrop-in 240ms var(--ease-out) both",
@@ -1157,7 +1158,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
         style={{
           position: "relative",
           background: "linear-gradient(180deg, var(--color-paper), var(--color-cream))",
-          borderRadius: "24px 24px 0 0",
+          borderRadius: 24,
           width: "100%",
           maxWidth: 480,
           maxHeight: "94dvh",
@@ -1202,7 +1203,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             display: "flex",
             alignItems: "center",
             gap: 10,
-            margin: "4px 52px 14px 4px",
+            margin: "4px 52px 2px 4px",
           }}>
             <h2 style={{
               fontFamily: "var(--font-display)",
@@ -1238,18 +1239,31 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             >🔊</button>
           </div>
 
-          {/* Character image card with literal-PL caption overlay */}
+          {/* Literal Polish translation — sits right under the name */}
+          {literalPL && (
+            <p style={{
+              color: "var(--color-muted)",
+              fontSize: 13,
+              margin: "0 4px 14px",
+              fontWeight: 600,
+              lineHeight: 1.35,
+            }}>
+              <span style={{ opacity: 0.75, marginRight: 4 }}>dosłownie:</span>
+              {literalPL}
+            </p>
+          )}
+
+          {/* Character image card */}
           <div style={{
             background: "linear-gradient(135deg, var(--color-cream-deep), #FFE8B8)",
             borderRadius: 20,
             padding: 14,
-            paddingBottom: 0,
             marginBottom: 14,
             position: "relative",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            minHeight: 200,
+            minHeight: 180,
             aspectRatio: "16 / 11",
             overflow: "hidden",
           }}>
@@ -1260,7 +1274,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
                 draggable={false}
                 style={{
                   maxWidth: "92%",
-                  maxHeight: "82%",
+                  maxHeight: "92%",
                   objectFit: "contain",
                   filter: "drop-shadow(0 8px 14px rgba(0,0,0,0.18))",
                   animation: "az-pop-in 420ms var(--ease-spring) both",
@@ -1271,52 +1285,17 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             ) : (
               <span aria-hidden="true" style={{ fontSize: 64 }}>{current.emoji}</span>
             )}
-
-            {/* Literal Polish caption */}
-            {literalPL && (
-              <div style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                padding: "8px 14px",
-                background: "linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.78) 60%)",
-                color: "#FFF7E8",
-                textAlign: "center",
-                fontFamily: "var(--font-display)",
-                fontWeight: 600,
-                fontSize: 13.5,
-                letterSpacing: "0.2px",
-                pointerEvents: "none",
-              }}>
-                <span style={{ opacity: 0.7, fontSize: 11, marginRight: 6 }}>dosłownie:</span>
-                "{literalPL}"
-              </div>
-            )}
           </div>
 
           {/* Polish equivalent idiom — only when one exists */}
           {equivalentPL && (
-            <div style={{
-              margin: "0 0 14px",
-              padding: "8px 14px",
-              background: "linear-gradient(135deg, #FEF3C7, #FDE68A)",
-              border: "1px solid #F59E0B",
-              borderRadius: 14,
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: 14.5,
-              color: "#7C2D12",
-              textAlign: "center",
-              boxShadow: "0 2px 6px rgba(245, 158, 11, 0.18)",
-            }}>
-              <span aria-hidden="true" style={{ marginRight: 6 }}>🇵🇱</span>
-              "{equivalentPL}"
-            </div>
+            <LearningSection title="🇵🇱 Polski odpowiednik" color="var(--color-sun)">
+              <span style={{ fontStyle: "italic" }}>"{equivalentPL}"</span>
+            </LearningSection>
           )}
 
           {/* What it means */}
-          <LearningSection title="What it means" color="var(--color-grape)">
+          <LearningSection title="Co to znaczy" color="var(--color-grape)">
             <div>{current.meaning}</div>
             {meaningPL && (
               <div style={{
@@ -1329,7 +1308,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
           </LearningSection>
 
           {/* Example */}
-          <LearningSection title="Example" color="var(--color-leaf)">
+          <LearningSection title="Przykład" color="var(--color-leaf)">
             <div>
               <span style={{ fontStyle: "italic" }}>"{current.example}"</span>
               <button
@@ -1363,7 +1342,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
 
           {/* Did you know? — Polish */}
           {funFactPL && (
-            <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
+            <LearningSection title="💡 Czy wiedziałeś?" color="var(--color-sun-deep)">
               {funFactPL}
             </LearningSection>
           )}
