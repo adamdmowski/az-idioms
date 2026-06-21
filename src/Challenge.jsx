@@ -13,8 +13,8 @@ const MEANING_PL = {
   "06": "Rzucić nawyk nagle i całkowicie.",
   "07": "Duży, oczywisty problem, o którym nikt nie mówi.",
   "08": "Bardzo spokojny i opanowany, nawet w trudnej sytuacji.",
-  "09": "Wygadać się, często przez przypadek.",
-  "10": "Zdradzić tajemnicę.",
+  "09": "Przypadkowo wygadać się — nie chciałeś tego powiedzieć.",
+  "10": "Zdradzić tajemnicę, celowo lub przypadkiem.",
   "11": "Mówi się do kogoś, kto jest cicho i nie chce mówić.",
   "12": "Powodzenia! — szczególnie przed występem.",
   "13": "Nagle stchórzyć i zrezygnować z czegoś zaplanowanego.",
@@ -131,17 +131,17 @@ function levenshtein(a, b) {
 const FILL_ANSWERS = {
   "01": ["raining cats and dogs", "it's raining cats and dogs"],
   "02": ["when pigs fly", "pigs fly"],
-  "03": ["on cloud nine", "cloud nine"],
+  "03": ["be on cloud nine", "on cloud nine", "cloud nine"],
   "04": ["hold your horses", "hold horses"],
   "05": ["a storm in a teacup", "storm in a teacup"],
-  "06": ["cold turkey"],
+  "06": ["go cold turkey", "cold turkey"],
   "07": ["the elephant in the room", "elephant in the room"],
   "08": ["cool as a cucumber"],
   "09": ["spill the beans", "spilled the beans", "spilling the beans"],
   "10": ["let the cat out of the bag", "the cat out of the bag", "cat out of the bag"],
   "11": ["cat got your tongue", "cat got tongue"],
   "12": ["break a leg"],
-  "13": ["cold feet", "got cold feet"],
+  "13": ["get cold feet", "cold feet", "got cold feet"],
   "14": ["piece of cake", "a piece of cake"],
 };
 
@@ -194,8 +194,16 @@ function wrongSound() {
 }
 
 // ─── Question generation ──
+// Idiom pairs that are too easy to confuse — never paired as distractors.
+const CONFUSABLE_PAIRS = {
+  9: 10, 10: 9,   // Spill the beans  ↔  Let the cat out of the bag
+  13: 6, 6: 13,   // Get cold feet    ↔  Go cold turkey
+};
+
 function makeImageQuestion(type, idiom, idioms) {
-  const distractors = shuffle(idioms.filter((x) => x.id !== idiom.id)).slice(0, 3);
+  const partner = CONFUSABLE_PAIRS[idiom.id];
+  const pool = idioms.filter((x) => x.id !== idiom.id && x.id !== partner);
+  const distractors = shuffle(pool).slice(0, 3);
   return { type, idiom, options: shuffle([idiom, ...distractors]) };
 }
 

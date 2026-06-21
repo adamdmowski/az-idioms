@@ -20,9 +20,9 @@ const SPAWN_MS = 900;                       // ≈6 floaters on screen at once
 const MAX_DISTRACTORS_BEFORE_CORRECT = 3;   // force a correct spawn at least this often
 const CORRECT_SPAWN_CHANCE = 0.30;          // otherwise base chance to spawn the correct one
 
-// Character sizing — ~75px on phones, ~95px on tablets/desktop
+// Character sizing — ~100px on phones, ~120px on tablets/desktop
 function computeCharSize(playW) {
-  return Math.min(Math.max(playW * 0.20, 74), 95);
+  return Math.min(Math.max(playW * 0.26, 100), 120);
 }
 
 function shuffle(arr) {
@@ -594,7 +594,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
       // Pick a Y that doesn't overlap a recently-spawned floater (only those
       // still near the right edge can collide in X with this new one).
       const now = performance.now();
-      const minSepRatio = (charSize * 0.95) / Math.max(1, playH);
+      // Use full charSize as Y-separation — bigger floaters need bigger gaps
+      const minSepRatio = (charSize * 1.05) / Math.max(1, playH);
       let yPercent = 0.05 + Math.random() * 0.75;
       for (let attempt = 0; attempt < 6; attempt++) {
         const trial = 0.05 + Math.random() * 0.75;
@@ -907,8 +908,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame }) {
               style={{
                 position: "absolute",
                 left: 0, top: 0,
-                width: "clamp(74px, 20vw, 95px)",
-                height: "clamp(74px, 20vw, 95px)",
+                width: "clamp(100px, 26vw, 120px)",
+                height: "clamp(100px, 26vw, 120px)",
                 padding: 0,
                 border: "none",
                 background: "transparent",

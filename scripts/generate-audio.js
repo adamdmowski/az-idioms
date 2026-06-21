@@ -30,20 +30,22 @@ const AUDIO_CONFIG = {
   speakingRate: 0.9,
 };
 
+// Each entry is either a plain string (treated as text) or an object
+// `{ ssml: "<speak>...</speak>" }` for phrases that need explicit prosody.
 const NAMES = [
   "It's raining cats and dogs",
   "When pigs fly",
-  "On cloud nine",
+  "Be on cloud nine",
   "Hold your horses",
   "A storm in a teacup",
-  "Cold turkey",
+  "Go cold turkey",
   "The elephant in the room",
   "Cool as a cucumber",
   "Spill the beans",
   "Let the cat out of the bag",
-  "Cat got your tongue?",
+  { ssml: '<speak><prosody rate="0.9"><emphasis level="moderate">Cat got your tongue?</emphasis></prosody></speak>' },
   "Break a leg",
-  "Cold feet",
+  "Get cold feet",
   "Piece of cake",
 ];
 
@@ -53,7 +55,7 @@ const EXAMPLES = [
   "She was on cloud nine when she won the prize.",
   "Hold your horses — let me finish first!",
   "They argued about the seats, but it was just a storm in a teacup.",
-  "He quit eating sweets cold turkey.",
+  "He quit eating sweets — he went cold turkey.",
   "Nobody talked about the broken window — it was the elephant in the room.",
   "During the test she stayed cool as a cucumber.",
   "Don't spill the beans about the surprise party!",
@@ -64,13 +66,18 @@ const EXAMPLES = [
   "The homework was a piece of cake.",
 ];
 
-async function synthesize(text) {
+// `input` may be a plain string OR { ssml } / { text }
+async function synthesize(input) {
+  const inputBody =
+    typeof input === "string"
+      ? { text: input }
+      : (input.ssml ? { ssml: input.ssml } : { text: input.text });
   const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${API_KEY}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      input: { text },
+      input: inputBody,
       voice: VOICE,
       audioConfig: AUDIO_CONFIG,
     }),
@@ -84,6 +91,13 @@ async function synthesize(text) {
   return Buffer.from(data.audioContent, "base64");
 }
 
+function previewOf(input) {
+  if (typeof input === "string") return input;
+  if (input.ssml) return "[ssml] " + input.ssml.replace(/<[^>]+>/g, "");
+  if (input.text) return input.text;
+  return "";
+}
+
 function kb(n) {
   return (n / 1024).toFixed(1).padStart(7) + " KB";
 }
@@ -95,23 +109,24 @@ async function main() {
 
   let total = 0;
   const tasks = [
-    ...NAMES.map((text, i) => ({
+    ...NAMES.map((input, i) => ({
       kind: "name",
       file: `name_${String(i + 1).padStart(2, "0")}.mp3`,
-      text,
+      input,
     })),
-    ...EXAMPLES.map((text, i) => ({
+    ...EXAMPLES.map((input, i) => ({
       kind: "example",
       file: `example_${String(i + 1).padStart(2, "0")}.mp3`,
-      text,
+      input,
     })),
   ];
 
   for (const t of tasks) {
-    const preview = t.text.length > 50 ? t.text.slice(0, 47) + "…" : t.text;
-    process.stdout.write(`  ${t.file.padEnd(18)} "${preview}" `);
+    const preview = previewOf(t.input);
+    const trimmed = preview.length > 50 ? preview.slice(0, 47) + "…" : preview;
+    process.stdout.write(`  ${t.file.padEnd(18)} "${trimmed}" `);
     try {
-      const buf = await synthesize(t.text);
+      const buf = await synthesize(t.input);
       await fs.writeFile(path.join(OUT_DIR, t.file), buf);
       total += buf.length;
       process.stdout.write(`${kb(buf.length)}\n`);
