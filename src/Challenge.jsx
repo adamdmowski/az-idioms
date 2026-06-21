@@ -445,10 +445,12 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   const [pickedId, setPickedId] = useState(null);
   const [feedback, setFeedback] = useState(null); // 'correct' | 'wrong' | null
   const [showPL, setShowPL] = useState(false); // Medium-level Polish reveal toggle
-  // Word-bank state (Hard + Boss fill questions). placedKeys is the chip keys
-  // (in order) the kid has tapped into the build area; chipAttempted = whether
-  // they've pressed Check yet on this question.
-  const [placedKeys, setPlacedKeys] = useState([]);
+  // Word-bank state (Hard + Boss fill questions). slots is positional —
+  // slots[i] is the chip key in answer-position i, or null. lockedSlots is the
+  // set of position indices that have been confirmed correct in a previous
+  // Check (their chips stay green-locked and can't be removed).
+  const [slots, setSlots] = useState([]);
+  const [lockedSlots, setLockedSlots] = useState(new Set());
   // Replay loop — review missed questions before showing results
   const [activeQuestions, setActiveQuestions] = useState(questions);
   const [missedQuestions, setMissedQuestions] = useState([]);
@@ -468,7 +470,15 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     setPickedId(null);
     setFeedback(null);
     setShowPL(false);
-    setPlacedKeys([]);
+    // Word-bank: resize slots array to match the new target's word count.
+    if (question?.type === "fill") {
+      const targetLen = (question.primaryAnswer || "")
+        .trim().split(/\s+/).filter(Boolean).length;
+      setSlots(Array(targetLen).fill(null));
+    } else {
+      setSlots([]);
+    }
+    setLockedSlots(new Set());
     if (!question) return;
 
     // Auto-read the prompt at the START of each question — Easy + Medium only.
@@ -478,7 +488,7 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
     } else if (level === "medium" && question.type === "meaning") {
       speakText(question.idiom.meaning);
     }
-  }, [questionIdx, question?.type, level]);
+  }, [questionIdx, question?.type, question?.idiom?.id, level]);
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -540,27 +550,43 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
   // ── Word-bank helpers (Hard + Boss fill questions) ───────
   const chips = question?.type === "fill" ? question.chips : [];
   const chipByKey = (key) => chips.find((c) => c.key === key);
-  const placedWords = placedKeys.map((k) => chipByKey(k)?.word || "");
-  const availableChips = chips.filter((c) => !placedKeys.includes(c.key));
+  const targetWords = (question?.type === "fill" && question.primaryAnswer)
+    ? question.primaryAnswer.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    : [];
+  // A chip is "in use" if it occupies any slot (locked or not).
+  const slotContainsKey = (key) => slots.some((s) => s === key);
+  const availableChips = chips.filter((c) => !slotContainsKey(c.key));
+  const allFilled = slots.length > 0 && slots.every((s) => s != null);
 
   const placeChip = (chip) => {
     if (feedback === "correct") return;
-    if (placedKeys.includes(chip.key)) return;
-    setPlacedKeys((p) => [...p, chip.key]);
+    if (slotContainsKey(chip.key)) return;
+    // Drop into the first empty, unlocked slot (left-to-right build flow).
+    const firstEmpty = slots.findIndex((s, i) => s == null && !lockedSlots.has(i));
+    if (firstEmpty === -1) return;
+    setSlots((prev) => {
+      const next = [...prev];
+      next[firstEmpty] = chip.key;
+      return next;
+    });
   };
-  const removePlacedChip = (key) => {
+  const removePlacedChip = (slotIdx) => {
     if (feedback === "correct") return;
-    setPlacedKeys((p) => p.filter((k) => k !== key));
+    if (lockedSlots.has(slotIdx)) return;
+    setSlots((prev) => {
+      const next = [...prev];
+      next[slotIdx] = null;
+      return next;
+    });
   };
 
   const handleCheckWordBank = () => {
     if (!question || question.type !== "fill") return;
-    if (placedKeys.length === 0) return;
+    if (!allFilled) return;
     if (feedback === "correct") return;
 
-    const built = placedWords.join(" ").trim().toLowerCase();
-    const target = (question.primaryAnswer || "").trim().toLowerCase();
-    const isCorrect = built === target;
+    const placedWords = slots.map((k) => (k == null ? "" : (chipByKey(k)?.word || "")));
+    const isCorrect = placedWords.every((w, i) => w === targetWords[i]);
 
     if (isCorrect) {
       const firstTry = attempts === 0;
@@ -571,6 +597,19 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(advanceQuestion, 1000);
     } else {
+      // Partial credit: lock positions that match, return chips in wrong
+      // positions back to the bank for the next attempt.
+      const nextSlots = [...slots];
+      const nextLocked = new Set(lockedSlots);
+      for (let i = 0; i < slots.length; i++) {
+        if (placedWords[i] === targetWords[i]) {
+          nextLocked.add(i);
+        } else {
+          nextSlots[i] = null;
+        }
+      }
+      setSlots(nextSlots);
+      setLockedSlots(nextLocked);
       if (attempts === 0 && !inReplay) {
         setMissedQuestions((m) => [...m, question]);
       }
@@ -580,7 +619,6 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         setFeedback(null);
-        setPlacedKeys([]); // reset chips so the kid can try again
       }, 700);
     }
   };
@@ -839,11 +877,13 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
 
         {question.type === "fill" && (
           <div style={{ maxWidth: 460, margin: "0 auto" }}>
-            {/* Build area — placed chips in tap order. Tap a placed chip to undo. */}
+            {/* Build area — positional slots. Each slot is either empty (dashed
+                placeholder), a placed chip (tappable to remove), or a locked
+                correct chip (green, not tappable). */}
             <div
               aria-label="Your answer"
               style={{
-                minHeight: 56,
+                minHeight: 64,
                 background: "var(--color-card)",
                 border: "2px dashed var(--color-line)",
                 borderRadius: 14,
@@ -853,44 +893,83 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
                 flexWrap: "wrap",
                 gap: 8,
                 alignItems: "center",
-                justifyContent: placedKeys.length === 0 ? "center" : "flex-start",
+                justifyContent: "center",
               }}
             >
-              {placedKeys.length === 0 ? (
-                <span style={{
-                  color: "var(--color-muted)",
-                  fontSize: 13,
-                  fontWeight: 600,
-                  fontStyle: "italic",
-                }}>Tap words below to build the idiom</span>
-              ) : (
-                placedKeys.map((key) => {
-                  const chip = chipByKey(key);
-                  if (!chip) return null;
+              {slots.map((key, idx) => {
+                const locked = lockedSlots.has(idx);
+                const chip = key != null ? chipByKey(key) : null;
+
+                if (!chip) {
+                  // Empty slot — dashed placeholder.
                   return (
-                    <button
-                      key={key}
-                      onClick={() => removePlacedChip(key)}
-                      disabled={feedback === "correct"}
-                      aria-label={`Remove "${chip.word}"`}
-                      className="az-tap"
+                    <span
+                      key={`slot-${idx}`}
+                      aria-label={`Empty slot ${idx + 1}`}
                       style={{
-                        background: "linear-gradient(135deg, var(--color-ink-soft), var(--color-ink))",
+                        minWidth: 56,
+                        height: 38,
+                        border: "2px dashed var(--color-line)",
+                        borderRadius: 999,
+                        background: "transparent",
+                        opacity: 0.6,
+                      }}
+                    />
+                  );
+                }
+
+                if (locked) {
+                  // Correct in correct position — green, not removable.
+                  return (
+                    <span
+                      key={`slot-${idx}`}
+                      aria-label={`Correct: "${chip.word}"`}
+                      style={{
+                        background: "linear-gradient(135deg, #22C55E, #16A34A)",
                         color: "#fff",
-                        border: "none",
+                        border: "1px solid #16A34A",
                         borderRadius: 999,
                         padding: "8px 14px",
                         fontFamily: "var(--font-display)",
                         fontWeight: 700,
                         fontSize: "clamp(14px, 4vw, 16px)",
-                        cursor: feedback === "correct" ? "default" : "pointer",
-                        boxShadow: "var(--shadow-sm)",
-                        WebkitTapHighlightColor: "transparent",
+                        boxShadow: "0 2px 8px rgba(22, 163, 74, 0.35)",
+                        cursor: "default",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
                       }}
-                    >{chip.word}</button>
+                    >
+                      <span aria-hidden="true" style={{ fontSize: 12 }}>✓</span>
+                      {chip.word}
+                    </span>
                   );
-                })
-              )}
+                }
+
+                // Placed but not locked — tap to remove back into the bank.
+                return (
+                  <button
+                    key={`slot-${idx}`}
+                    onClick={() => removePlacedChip(idx)}
+                    disabled={feedback === "correct"}
+                    aria-label={`Remove "${chip.word}"`}
+                    className="az-tap"
+                    style={{
+                      background: "linear-gradient(135deg, var(--color-ink-soft), var(--color-ink))",
+                      color: "#fff",
+                      border: "none",
+                      borderRadius: 999,
+                      padding: "8px 14px",
+                      fontFamily: "var(--font-display)",
+                      fontWeight: 700,
+                      fontSize: "clamp(14px, 4vw, 16px)",
+                      cursor: feedback === "correct" ? "default" : "pointer",
+                      boxShadow: "var(--shadow-sm)",
+                      WebkitTapHighlightColor: "transparent",
+                    }}
+                  >{chip.word}</button>
+                );
+              })}
             </div>
 
             {/* Chip bank — available chips to tap */}
@@ -925,25 +1004,25 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
               ))}
             </div>
 
-            {/* Check button */}
+            {/* Check button — enabled only when every slot is filled */}
             <div style={{ textAlign: "center" }}>
               <button
                 onClick={handleCheckWordBank}
-                disabled={placedKeys.length === 0 || feedback === "correct"}
+                disabled={!allFilled || feedback === "correct"}
                 className="az-tap"
                 style={{
-                  background: placedKeys.length === 0
+                  background: !allFilled
                     ? "var(--color-card-soft)"
                     : "linear-gradient(135deg, #22C55E, #16A34A)",
-                  color: placedKeys.length === 0 ? "var(--color-muted)" : "#fff",
+                  color: !allFilled ? "var(--color-muted)" : "#fff",
                   border: "none",
                   padding: "12px 28px",
                   borderRadius: 16,
                   fontFamily: "var(--font-display)",
                   fontWeight: 700,
                   fontSize: 16,
-                  cursor: placedKeys.length === 0 ? "default" : "pointer",
-                  boxShadow: placedKeys.length === 0 ? "none" : "var(--shadow-glow-leaf)",
+                  cursor: !allFilled ? "default" : "pointer",
+                  boxShadow: !allFilled ? "none" : "var(--shadow-glow-leaf)",
                   minHeight: 48,
                   minWidth: 160,
                   WebkitTapHighlightColor: "transparent",

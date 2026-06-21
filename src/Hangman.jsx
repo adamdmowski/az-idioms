@@ -773,16 +773,18 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
         )}
       </div>
 
-      {/* Letter slots, grouped by word */}
+      {/* Letter slots, grouped by word. Bigger between-word gap so the word
+          boundaries are obvious; tight within-word gap so each word reads as a unit. */}
       <div style={{
         display: "flex",
         flexWrap: "wrap",
         justifyContent: "center",
-        gap: 12,
+        rowGap: 12,
+        columnGap: "clamp(24px, 6vw, 32px)",
         marginBottom: 12,
       }}>
         {answer.split(" ").map((word, wi) => (
-          <div key={wi} style={{ display: "flex", gap: 4 }}>
+          <div key={wi} style={{ display: "flex", gap: 5 }}>
             {[...word].map((ch, ci) => {
               const lower = ch.toLowerCase();
               const isLetter = /[a-z]/.test(lower);
