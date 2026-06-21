@@ -582,16 +582,20 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
     setPhase("over");
   }, []);
 
-  // ── Reset per-round state ──
-  useEffect(() => {
-    if (phase !== "playing") return;
+  // ── Clear all per-round state in one shot. Called inside the advance timer
+  // so React batches these with setRoundIdx — that way the next render starts
+  // with a clean closure (empty guessedLetters, false refs). Without this
+  // batching the win/lose useEffect would fire against the OLD guessedLetters
+  // and the NEW answer, sometimes triggering a phantom win/lose and an
+  // instant auto-skip.
+  const resetRoundState = useCallback(() => {
     setGuessedLetters(new Set());
     setHintFlashLetter(null);
     setRoundFeedback(null);
     wonRef.current = false;
     lostRef.current = false;
     hintTriggeredRef.current = false;
-  }, [roundIdx, phase]);
+  }, []);
 
   // ── Cleanup on unmount ──
   useEffect(() => () => {
@@ -602,6 +606,9 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
   // ── Win / lose / hint side effects ──
   useEffect(() => {
     if (phase !== "playing" || !currentIdiom) return;
+    // Defense in depth: a fresh round cannot be won or lost — short-circuit
+    // before the won/lost paths could fire against a stale closure.
+    if (guessedLetters.size === 0) return;
 
     if (won && !wonRef.current) {
       wonRef.current = true;
@@ -611,10 +618,17 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
       correctSound();
       playForIdiom(currentIdiom, "name");
       setRoundFeedback("won");
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = setTimeout(() => {
         advanceTimerRef.current = null;
-        if (roundIdx + 1 >= ROUNDS_PER_GAME) finishGame(next);
-        else setRoundIdx((i) => i + 1);
+        if (roundIdx + 1 >= ROUNDS_PER_GAME) {
+          finishGame(next);
+        } else {
+          // Reset round state in the SAME batch as the round advance so the
+          // next render sees clean state (empty guessedLetters, false refs).
+          resetRoundState();
+          setRoundIdx((i) => i + 1);
+        }
       }, 1500);
       return;
     }
@@ -623,10 +637,15 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
       lostRef.current = true;
       wrongSound();
       setRoundFeedback("lost");
+      if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
       advanceTimerRef.current = setTimeout(() => {
         advanceTimerRef.current = null;
-        if (roundIdx + 1 >= ROUNDS_PER_GAME) finishGame(score + PER_ROUND_LOST);
-        else setRoundIdx((i) => i + 1);
+        if (roundIdx + 1 >= ROUNDS_PER_GAME) {
+          finishGame(score + PER_ROUND_LOST);
+        } else {
+          resetRoundState();
+          setRoundIdx((i) => i + 1);
+        }
       }, 2000);
       return;
     }
@@ -639,7 +658,7 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
       const hint = ordered.find((l) => !correctlyGuessed.has(l));
       if (hint) setHintFlashLetter(hint);
     }
-  }, [won, lost, wrongCount, hintFlashLetter, phase, currentIdiom?.id, roundIdx, score, answer, finishGame, correctlyGuessed]);
+  }, [won, lost, wrongCount, hintFlashLetter, phase, currentIdiom?.id, roundIdx, score, answer, finishGame, correctlyGuessed, guessedLetters, resetRoundState]);
 
   // Hint flash → after the 800ms gold flash, add the letter to guessedLetters for free
   useEffect(() => {
@@ -660,6 +679,9 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame }) {
     if (guessedLetters.has(letter)) return;
     if (hintFlashLetter != null) return;
     if (roundFeedback != null) return;
+    // A round-advance timer is in flight — ignore any taps that slip through
+    // until the next round renders.
+    if (advanceTimerRef.current != null) return;
 
     const isCorrect = answerLetters.has(letter);
     if (isCorrect) correctSound();
