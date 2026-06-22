@@ -854,42 +854,31 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
         ))}
       </div>
 
-      {/* Gallows */}
+      {/* Melting snowman — one pre-rendered stage per wrong guess */}
       <div style={{
         display: "flex",
         justifyContent: "center",
+        alignItems: "flex-end",
+        height: 150,
         marginBottom: 12,
       }}>
-        <svg width="120" height="150" viewBox="0 0 120 150" aria-hidden="true">
-          <line x1="8" y1="146" x2="92" y2="146" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
-          <line x1="22" y1="146" x2="22" y2="8" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
-          <line x1="22" y1="8" x2="78" y2="8" stroke="var(--color-text)" strokeWidth="3" strokeLinecap="round"/>
-          <line x1="78" y1="8" x2="78" y2="24" stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-          {wrongCount >= 1 && (
-            <circle key="head" className="hangman-part" cx="78" cy="35" r="10"
-                    stroke="var(--color-text)" strokeWidth="2.5" fill="none"/>
-          )}
-          {wrongCount >= 2 && (
-            <line key="body" className="hangman-part" x1="78" y1="45" x2="78" y2="88"
-                  stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-          )}
-          {wrongCount >= 3 && (
-            <line key="larm" className="hangman-part" x1="78" y1="58" x2="62" y2="74"
-                  stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-          )}
-          {wrongCount >= 4 && (
-            <line key="rarm" className="hangman-part" x1="78" y1="58" x2="94" y2="74"
-                  stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-          )}
-          {wrongCount >= 5 && (
-            <line key="lleg" className="hangman-part" x1="78" y1="88" x2="62" y2="114"
-                  stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-          )}
-          {wrongCount >= 6 && (
-            <line key="rleg" className="hangman-part" x1="78" y1="88" x2="94" y2="114"
-                  stroke="var(--color-text)" strokeWidth="2.5" strokeLinecap="round"/>
-          )}
-        </svg>
+        <img
+          key={wrongCount}
+          src={`/snowman/snowman_${wrongCount}.webp`}
+          alt={`Snowman, ${wrongCount} of ${MAX_WRONG} melted`}
+          draggable={false}
+          className="snowman-melt"
+          style={{
+            display: "block",
+            maxWidth: "100%",
+            maxHeight: 150,
+            width: "auto",
+            height: "auto",
+            objectFit: "contain",
+            userSelect: "none",
+            WebkitUserSelect: "none",
+          }}
+        />
       </div>
 
       {/* QWERTY keyboard */}

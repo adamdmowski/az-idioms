@@ -146,11 +146,21 @@ button { font-family: inherit; }
 }
 
 /* ─── Hangman (Hard / Boss fill questions) ─── */
-@keyframes hangman-part-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+/* Snowman stage swap: a brief wobble + settle to draw the eye to the melting. */
+@keyframes snowman-melt {
+  0%   { transform: scale(1) rotate(0deg); }
+  25%  { transform: scale(1.08, 0.92) rotate(-3deg); }
+  55%  { transform: scale(0.96, 1.04) rotate(2.5deg); }
+  80%  { transform: scale(1.02, 0.99) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0deg); }
 }
-.hangman-part { animation: hangman-part-in 320ms var(--ease-out) both; }
+.snowman-melt {
+  animation: snowman-melt 520ms var(--ease-out) both;
+  transform-origin: bottom center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .snowman-melt { animation: none; }
+}
 
 @keyframes hangman-hint-flash {
   0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); transform: scale(1); }
