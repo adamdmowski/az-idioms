@@ -558,6 +558,16 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       }
     } else {
       setQuestionIdx((i) => i + 1);
+      // Medium: read the next question's meaning now that the visual is
+      // advancing. This runs ~800ms after the correct tap (inside the gesture-
+      // rooted advance timer), still within the browser's gesture-trust window,
+      // so the definition is heard WITH the new question rather than over the
+      // previous "Correct!" banner. questionIdx here is the just-answered
+      // question's index, so the next one is questionIdx + 1.
+      if (level === "medium") {
+        const nextQ = activeQuestions[questionIdx + 1];
+        if (nextQ?.type === "meaning") playForIdiom(nextQ.idiom, "meaning");
+      }
     }
   };
 
@@ -574,16 +584,10 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       // Easy + Medium have already auto-read the prompt at the start of the
       // question, so skip the redundant post-tap audio. Boss keeps it.
       if (level === "boss") playForIdiom(question.idiom, "name");
-      // Medium: queue the NEXT question's meaning audio inside this user-
-      // gesture stack so iOS Chrome will actually play it. The useEffect-
-      // based auto-read runs after render commit and iOS treats it as out-
-      // of-gesture.
-      if (level === "medium" && !isLast) {
-        const nextQ = activeQuestions[questionIdx + 1];
-        if (nextQ?.type === "meaning") {
-          setTimeout(() => playForIdiom(nextQ.idiom, "meaning"), 50);
-        }
-      }
+      // Medium: the NEXT question's meaning audio is triggered from
+      // advanceQuestion (after the 800ms visual transition) — NOT here — so the
+      // student hears the new definition as the new question appears, instead of
+      // over the "Correct!" banner for the question they just answered.
       setFeedback("correct");
       timerRef.current = setTimeout(advanceQuestion, 800);
     } else {
