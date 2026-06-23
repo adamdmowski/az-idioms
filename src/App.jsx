@@ -675,11 +675,14 @@ function WallOfFame({ onNav, initialTab, highlight }) {
       setStatus("unconfigured");
       return;
     }
+    // The Catch tab is a combined board for both Classic ("catch") and Turbo
+    // ("catch_turbo") scores; every other tab is a single mode.
+    const modesForTab = mode === "catch" ? ["catch", "catch_turbo"] : [mode];
     try {
       const { data, error } = await supabase
         .from("scores")
         .select("id, name, score, created_at, mode")
-        .eq("mode", mode)
+        .in("mode", modesForTab)
         .order("score", { ascending: false })
         .order("created_at", { ascending: true })
         .limit(50);
@@ -1771,6 +1774,9 @@ export default function App() {
   const musicPauseRef = useRef(musicPause);
   const musicVolumeRef = useRef(musicVolume);
   const learningOpenRef = useRef(learningIdiomId != null);
+  // Turbo (Catch survival mode) drives its own ramping music: { volume, rate }
+  // while active, or null when not in Turbo. Overrides the normal volume/rate.
+  const turboMusicRef = useRef(null);
   useEffect(() => { pageRef.current = page; }, [page]);
   useEffect(() => { mutedRef.current = muted; }, [muted]);
   useEffect(() => { musicOffRef.current = musicOff; }, [musicOff]);
@@ -1811,9 +1817,28 @@ export default function App() {
       audio.pause();
       return;
     }
-    audio.volume = musicVolumeRef.current;
+    // Turbo mode overrides the volume + playback rate to ramp tension. Outside
+    // Turbo, the rate is always reset to normal (1.0).
+    const turbo = turboMusicRef.current;
+    if (turbo) {
+      audio.volume = turbo.volume;
+      audio.playbackRate = turbo.rate;
+    } else {
+      audio.volume = musicVolumeRef.current;
+      audio.playbackRate = 1;
+    }
     try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
   }, []);
+
+  // Catch Turbo mode calls this to drive its own ramping music. cfg =
+  // { active: true, volume, rate } sets the override; { active: false } clears
+  // it and reverts to the normal volume/rate via applyMusicState.
+  const setTurboMusic = useCallback((cfg) => {
+    turboMusicRef.current = (cfg && cfg.active)
+      ? { volume: cfg.volume, rate: cfg.rate }
+      : null;
+    applyMusicState();
+  }, [applyMusicState]);
 
   // Create the Audio element on mount. Music is NOT started here — the splash
   // "Enter" button is the single, gesture-based trigger (see handleEnter).
@@ -2105,6 +2130,7 @@ export default function App() {
           onBack={() => handleNav("games")}
           onViewFame={(hl) => handleNav("leaderboard", { tab: hl?.mode === "turbo" ? "catch_turbo" : "catch", highlight: hl })}
           onMusicPause={setMusicPause}
+          onTurboMusic={setTurboMusic}
         />
       )}
       {page === "hangman" && (

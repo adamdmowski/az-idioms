@@ -27,11 +27,16 @@ const CORRECT_SPAWN_CHANCE = 0.30;          // otherwise base chance to spawn th
 // ── Turbo (survival) ramp ──
 // Every TURBO_RAMP_EVERY correct answers, the crossing time and spawn gap
 // shrink by one step, down to their floors. Speed "level" = steps + 1.
-const TURBO_RAMP_EVERY = 5;
-const TURBO_DURATION_STEP = 0.3;   // seconds shaved per ramp step
+const TURBO_RAMP_EVERY = 3;
+const TURBO_DURATION_STEP = 0.4;   // seconds shaved per ramp step (5.5 → 5.1 → 4.7 …)
 const TURBO_DURATION_MIN = 2.0;    // fastest crossing
-const TURBO_SPAWN_STEP = 100;      // ms shaved per ramp step
+const TURBO_SPAWN_STEP = 80;       // ms shaved per ramp step (1100 → 1020 → 940 …)
 const TURBO_SPAWN_MIN = 600;       // fastest spawn cadence
+
+// Turbo music ramp — volume + playback rate climb with the speed level.
+function turboMusicVolume(level) { return Math.min(0.4, 0.1 + 0.05 * (level - 1)); }
+function turboMusicRate(level)   { return Math.min(1.4, 1.0 + 0.05 * (level - 1)); }
+const TURBO_PAUSE_VOLUME = 0.08;   // quiet bed while the pause overlay is up
 
 // Speed-bonus tiers (apply to both modes). Elapsed since the prompt appeared.
 function speedBonusFor(elapsedSec) {
@@ -610,16 +615,8 @@ function EndScreen({ score, highScore, newHigh, gameMode, correctCount, speedLev
 
 
 // ─── Main game component ────────────────
-export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPause }) {
+export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPause, onTurboMusic }) {
   const [phase, setPhase] = useState("start"); // 'start' | 'playing' | 'over'
-
-  // Tell App to pause background music only during the active "playing" phase.
-  // start/over screens are menus where music should continue. Cleanup on
-  // unmount ensures music resumes if the user navigates away mid-round.
-  useEffect(() => {
-    if (onMusicPause) onMusicPause(phase === "playing");
-    return () => { if (onMusicPause) onMusicPause(false); };
-  }, [phase, onMusicPause]);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(1);
   const [lives, setLives] = useState(LIVES_START);
@@ -634,6 +631,15 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const [newHigh, setNewHigh] = useState(false);
   const [gameMode, setGameMode] = useState("classic"); // 'classic' | 'turbo'
   const [correctCount, setCorrectCount] = useState(0);  // turbo HUD + results
+  const [paused, setPaused] = useState(false);          // turbo pause overlay
+
+  // Tell App to pause background music during active Classic play. Turbo never
+  // pauses the music — it drives its own ramping volume/rate via onTurboMusic.
+  useEffect(() => {
+    const classicPlaying = phase === "playing" && gameMode === "classic";
+    if (onMusicPause) onMusicPause(classicPlaying);
+    return () => { if (onMusicPause) onMusicPause(false); };
+  }, [phase, gameMode, onMusicPause]);
 
   const playAreaRef = useRef(null);
   const floaterRefs = useRef({});
@@ -654,6 +660,9 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const gameModeRef = useRef("classic");
   const correctCountRef = useRef(0);
   const promptStartTimeRef = useRef(0);         // when the current prompt appeared (for speed bonus)
+  const pausedRef = useRef(false);              // RAF / spawn skip-gate while paused
+  const pauseStartRef = useRef(0);              // wall-clock when the pause began
+  const spawnTickRef = useRef(null);            // spawn scheduler, exposed so resume can restart it
 
   // Sync refs with state so RAF / setInterval closures see current values
   useEffect(() => { floatersRef.current = floaters; }, [floaters]);
@@ -680,6 +689,51 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   );
   const speedLevel = Math.floor(correctCount / TURBO_RAMP_EVERY) + 1;
 
+  // ── Turbo music ramp ───────────────────
+  // While Turbo is being played, drive the background music's volume + rate
+  // from the speed level (quieter when paused). Anything else (Classic play,
+  // start/over screens, unmount) clears the override so App reverts to normal.
+  useEffect(() => {
+    if (!onTurboMusic) return;
+    if (phase === "playing" && gameMode === "turbo") {
+      onTurboMusic({
+        active: true,
+        volume: paused ? TURBO_PAUSE_VOLUME : turboMusicVolume(speedLevel),
+        rate: turboMusicRate(speedLevel),
+      });
+    } else {
+      onTurboMusic({ active: false });
+    }
+  }, [phase, gameMode, speedLevel, paused, onTurboMusic]);
+
+  // Clear the Turbo music override if the component unmounts mid-game.
+  useEffect(() => () => { if (onTurboMusic) onTurboMusic({ active: false }); }, [onTurboMusic]);
+
+  // ── Pause / resume (Turbo only) ────────
+  const pauseGame = useCallback(() => {
+    if (pausedRef.current) return;
+    pausedRef.current = true;
+    pauseStartRef.current = performance.now();
+    // Stop spawning new characters; the RAF loop freezes itself via pausedRef.
+    if (spawnTimerRef.current) { clearTimeout(spawnTimerRef.current); spawnTimerRef.current = null; }
+    setPaused(true);
+  }, []);
+
+  const resumeGame = useCallback(() => {
+    if (!pausedRef.current) return;
+    // Shift every floater's clock (and the speed-bonus timer) forward by the
+    // paused duration so nothing jumps — they continue from the frozen frame.
+    const delta = performance.now() - pauseStartRef.current;
+    floatersRef.current.forEach((f) => { f.startTime += delta; });
+    promptStartTimeRef.current += delta;
+    pausedRef.current = false;
+    setPaused(false);
+    // Restart the spawn cadence at the current speed level.
+    if (spawnTickRef.current) {
+      spawnTimerRef.current = setTimeout(spawnTickRef.current, currentSpawnMs());
+    }
+  }, []);
+
   // ── Lifecycle: startGame ───────────────
   // mode defaults to "classic" so an accidental no-arg call is safe.
   const startGame = useCallback((mode = "classic") => {
@@ -704,6 +758,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     comboRef.current = 1;
     spawnsSinceCorrectRef.current = 0;
     lockedRef.current = false;
+    pausedRef.current = false;
+    setPaused(false);
     promptStartTimeRef.current = performance.now();
     setPhase("playing");
   }, [idioms]);
@@ -715,6 +771,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (flashClearTimerRef.current) { clearTimeout(flashClearTimerRef.current); flashClearTimerRef.current = null; }
     cancelAudio();
+    pausedRef.current = false;
+    setPaused(false);
     setFloaters([]);
     setFlash(null);
     const final = scoreRef.current;
@@ -821,14 +879,18 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
       setFloaters((prev) => [...prev, newFloater]);
     };
 
-    doSpawn(); // first floater appears immediately
+    if (!pausedRef.current) doSpawn(); // first floater appears immediately
     // Self-rescheduling timeout (not setInterval) so the cadence can tighten
-    // mid-game as Turbo speeds up — each tick re-reads currentSpawnMs().
+    // mid-game as Turbo speeds up — each tick re-reads currentSpawnMs(). The
+    // tick is stored in a ref so resumeGame() can restart it after a pause.
     const tick = () => {
-      doSpawn();
+      if (!pausedRef.current) doSpawn();
       spawnTimerRef.current = setTimeout(tick, currentSpawnMs());
     };
-    spawnTimerRef.current = setTimeout(tick, currentSpawnMs());
+    spawnTickRef.current = tick;
+    if (!pausedRef.current) {
+      spawnTimerRef.current = setTimeout(tick, currentSpawnMs());
+    }
 
     return () => {
       if (spawnTimerRef.current) {
@@ -846,6 +908,13 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
 
     const loop = (now) => {
       if (stopped) return;
+      // Frozen while paused: keep the loop alive but don't advance or sweep any
+      // floaters, so they hold their last-painted position. resumeGame() shifts
+      // each startTime forward by the paused duration so nothing jumps.
+      if (pausedRef.current) {
+        rafRef.current = requestAnimationFrame(loop);
+        return;
+      }
       const playArea = playAreaRef.current;
       if (!playArea) {
         rafRef.current = requestAnimationFrame(loop);
@@ -1001,6 +1070,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   }, [finishGame]);
 
   const handleTap = useCallback((floater) => {
+    if (pausedRef.current) return;             // ignore taps while paused
     if (tappedKeysRef.current.has(floater.key)) return;
     if (lockedRef.current) return;             // mid-transition after a correct tap
     const target = shuffledRef.current[promptIdxRef.current];
@@ -1085,12 +1155,33 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
         WebkitBackdropFilter: "blur(10px)",
         borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
       }}>
-        <div style={{
-          fontFamily: "var(--font-display)",
-          fontSize: 26, fontWeight: 700,
-          color: "var(--color-text)",
-          lineHeight: 1,
-        }}>{score}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {isTurbo && (
+            <button
+              onClick={pauseGame}
+              aria-label="Pause game"
+              className="az-tap"
+              style={{
+                width: 36, height: 36,
+                flexShrink: 0,
+                borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.12)",
+                border: "1px solid rgba(255, 255, 255, 0.22)",
+                color: "#fff",
+                fontSize: 15,
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >⏸</button>
+          )}
+          <div style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 26, fontWeight: 700,
+            color: "var(--color-text)",
+            lineHeight: 1,
+          }}>{score}</div>
+        </div>
 
         <div style={{ textAlign: "center" }}>
           <div style={{
@@ -1295,6 +1386,75 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
             WebkitTapHighlightColor: "transparent",
           }}
         >← Quit</button>
+
+        {/* Pause overlay (Turbo only) — dims the frozen play area */}
+        {paused && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Game paused"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 20,
+              background: "rgba(10, 12, 20, 0.78)",
+              backdropFilter: "blur(4px)",
+              WebkitBackdropFilter: "blur(4px)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 18,
+              padding: 24,
+              textAlign: "center",
+            }}
+          >
+            <div aria-hidden="true" style={{ fontSize: 64, lineHeight: 1 }}>⏸</div>
+            <h2 style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "clamp(26px, 7vw, 34px)",
+              color: "#fff",
+              margin: 0,
+            }}>Paused</h2>
+            <div style={{
+              display: "flex", flexDirection: "column", gap: 12,
+              width: "100%", maxWidth: 260,
+            }}>
+              <button
+                onClick={resumeGame}
+                className="az-tap"
+                style={{
+                  background: "linear-gradient(135deg, #F97316, #DC2626)",
+                  color: "#fff",
+                  border: "none",
+                  padding: "15px 24px",
+                  borderRadius: 18,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700, fontSize: 19,
+                  cursor: "pointer",
+                  boxShadow: "0 8px 24px rgba(220, 38, 38, 0.5)",
+                  minHeight: 56,
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >▶ Resume</button>
+              <button
+                onClick={onBack}
+                className="az-tap"
+                style={{
+                  background: "rgba(255, 255, 255, 0.10)",
+                  color: "#fff",
+                  border: "2px solid rgba(255, 255, 255, 0.22)",
+                  padding: "12px 24px",
+                  borderRadius: 16,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 700, fontSize: 15,
+                  cursor: "pointer",
+                  WebkitTapHighlightColor: "transparent",
+                }}
+              >← Quit</button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
