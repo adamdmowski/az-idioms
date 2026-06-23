@@ -13,9 +13,15 @@ const ROUNDS_PER_GAME = 14;
 const MAX_WRONG = 6;
 const HINT_AFTER_WRONG = 3;
 const HINT_FLASH_MS = 800;
-const PER_ROUND_PERFECT = 10; // no wrong letters
-const PER_ROUND_PARTIAL = 5;  // some wrong but still won
-const PER_ROUND_LOST    = 0;  // ran out of guesses
+// Graduated scoring: each round starts at 20 and loses 3 per wrong letter,
+// floored at 0. Won-with-N-wrongs = 20 − 3N (N ≤ 5 → 20..5); a lost round = 0.
+// Max total = 14 rounds × 20 = 280.
+const PER_ROUND_MAX = 20;
+const WRONG_PENALTY = 3;
+function roundValueFor(wrongCount, isLost) {
+  if (isLost) return 0;
+  return Math.max(0, PER_ROUND_MAX - WRONG_PENALTY * wrongCount);
+}
 
 // Canonical idiom-name answers (lowercase, "raining cats and dogs" etc.)
 // Matches the FILL_ANSWERS[0] used in the old Hard quiz hangman.
@@ -542,12 +548,14 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
   const [roundFeedback, setRoundFeedback] = useState(null); // 'won' | 'lost' | null
   const [highScore, setHighScore] = useState(loadHigh);
   const [newHigh, setNewHigh] = useState(false);
+  const [valueFlash, setValueFlash] = useState(false); // brief red flash when the round value drops
 
   // Single-fire guards for win/lose/hint side effects
   const wonRef = useRef(false);
   const lostRef = useRef(false);
   const hintTriggeredRef = useRef(false);
   const advanceTimerRef = useRef(null);
+  const prevWrongRef = useRef(0); // tracks wrongCount to detect a new wrong guess
 
   const ready = cutouts && cutouts.length > 0;
   const currentIdiom = shuffled[roundIdx];
@@ -620,7 +628,7 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
 
     if (won && !wonRef.current) {
       wonRef.current = true;
-      const points = wrongCount === 0 ? PER_ROUND_PERFECT : PER_ROUND_PARTIAL;
+      const points = roundValueFor(wrongCount, false);
       const next = score + points;
       setScore(next);
       correctSound();
@@ -649,7 +657,7 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
       advanceTimerRef.current = setTimeout(() => {
         advanceTimerRef.current = null;
         if (roundIdx + 1 >= ROUNDS_PER_GAME) {
-          finishGame(score + PER_ROUND_LOST);
+          finishGame(score); // lost round scores 0
         } else {
           resetRoundState();
           setRoundIdx((i) => i + 1);
@@ -667,6 +675,19 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
       if (hint) setHintFlashLetter(hint);
     }
   }, [won, lost, wrongCount, hintFlashLetter, phase, currentIdiom?.id, roundIdx, score, answer, finishGame, correctlyGuessed, guessedLetters, resetRoundState]);
+
+  // Round value drops on each new wrong letter → brief red flash on the HUD chip.
+  // Resets cleanly between rounds: when guessedLetters clears, wrongCount → 0,
+  // which is not greater than the previous value, so no false flash fires.
+  useEffect(() => {
+    if (wrongCount > prevWrongRef.current) {
+      prevWrongRef.current = wrongCount;
+      setValueFlash(true);
+      const t = setTimeout(() => setValueFlash(false), 350);
+      return () => clearTimeout(t);
+    }
+    prevWrongRef.current = wrongCount;
+  }, [wrongCount]);
 
   // Hint flash → after the 800ms gold flash, add the letter to guessedLetters for free
   useEffect(() => {
@@ -749,6 +770,19 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
           {roundIdx + 1} / {ROUNDS_PER_GAME}
         </span>
         <span style={{ flex: 1 }} />
+        <span
+          aria-label={`Round worth ${roundValueFor(wrongCount, lost)} points`}
+          style={{
+            fontFamily: "var(--font-display)",
+            fontSize: 14, fontWeight: 800,
+            color: valueFlash ? "#fff" : "var(--color-text)",
+            background: valueFlash ? "#DC2626" : "var(--color-card)",
+            border: "1px solid var(--color-line)",
+            borderRadius: 999,
+            padding: "3px 10px",
+            transition: "background 180ms var(--ease-out), color 180ms var(--ease-out)",
+          }}
+        >🎯 {roundValueFor(wrongCount, lost)}</span>
         <span style={{
           fontFamily: "var(--font-display)",
           fontSize: 22, fontWeight: 700,

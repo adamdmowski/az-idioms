@@ -32,7 +32,7 @@ const SCORE_BOUNDS = {
   catch:       { min: 0, max: 2500 },  // 14 prompts × (10 × combo + 20 speed bonus); generous ceiling
   catch_turbo: { min: 0, max: 99999 }, // endless survival mode — effectively uncapped
   challenge:   { min: 0, max: 520 },   // cumulative across all levels: Easy 140 + Medium 140 + Hard 140 + Boss 100
-  hangman:     { min: 0, max: 140 },   // 14 idioms × 10 max per idiom
+  hangman:     { min: 0, max: 280 },   // 14 rounds × 20 max (20 − 3 per wrong letter)
 };
 
 export function isValidScore(score, mode) {
