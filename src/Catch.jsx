@@ -15,13 +15,31 @@ function savePlayerName(n) {
 
 // ─── Constants ──────────────────────────
 const HIGHSCORE_KEY = "azidioms_catch_highscore";
+const HIGHSCORE_TURBO_KEY = "azidioms_catch_turbo_highscore";
 const LIVES_START = 3;
 const PROMPTS_PER_ROUND = 14;
 const NEXT_AFTER_CORRECT_MS = 600;
-const DURATION_SEC = 5.5;                  // crossing time R → L (no ramp)
+const DURATION_SEC = 5.5;                  // crossing time R → L (Classic = fixed; Turbo = ramps down)
 const SPAWN_MS = 1100;                      // ≈4–5 floaters on screen at once
 const MAX_DISTRACTORS_BEFORE_CORRECT = 3;   // force a correct spawn at least this often
 const CORRECT_SPAWN_CHANCE = 0.30;          // otherwise base chance to spawn the correct one
+
+// ── Turbo (survival) ramp ──
+// Every TURBO_RAMP_EVERY correct answers, the crossing time and spawn gap
+// shrink by one step, down to their floors. Speed "level" = steps + 1.
+const TURBO_RAMP_EVERY = 5;
+const TURBO_DURATION_STEP = 0.3;   // seconds shaved per ramp step
+const TURBO_DURATION_MIN = 2.0;    // fastest crossing
+const TURBO_SPAWN_STEP = 100;      // ms shaved per ramp step
+const TURBO_SPAWN_MIN = 600;       // fastest spawn cadence
+
+// Speed-bonus tiers (apply to both modes). Elapsed since the prompt appeared.
+function speedBonusFor(elapsedSec) {
+  if (elapsedSec <= 1.5) return { points: 20, label: "⚡ Fast! +20", color: "#F59E0B" };
+  if (elapsedSec <= 3)   return { points: 10, label: "👍 +10",      color: "#16A34A" };
+  if (elapsedSec <= 5)   return { points: 5,  label: "⏱ +5",        color: "#3B82F6" };
+  return { points: 0, label: null, color: null };
+}
 
 // Character sizing — ~130px on phones, ~150px on tablets/desktop
 function computeCharSize(playW) {
@@ -44,15 +62,17 @@ function reducedMotion() {
 }
 
 // ─── Persistence ────────────────────────
-function loadHigh() {
+function loadHighFor(key) {
   try {
-    const raw = localStorage.getItem(HIGHSCORE_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? parseInt(raw, 10) || 0 : 0;
   } catch (_) { return 0; }
 }
-function saveHigh(n) {
-  try { localStorage.setItem(HIGHSCORE_KEY, String(n)); } catch (_) { /* ignore */ }
+function saveHighFor(key, n) {
+  try { localStorage.setItem(key, String(n)); } catch (_) { /* ignore */ }
 }
+function loadHigh() { return loadHighFor(HIGHSCORE_KEY); }
+function loadHighTurbo() { return loadHighFor(HIGHSCORE_TURBO_KEY); }
 
 function isCurrentlyMuted() {
   try { return localStorage.getItem("az-idioms-muted") === "1"; } catch (_) { return false; }
@@ -94,7 +114,7 @@ function wrongSound() {
 }
 
 // ─── Start screen ────────────────────────
-function StartScreen({ highScore, onStart, onBack, ready }) {
+function StartScreen({ highScore, turboHigh, onStart, onBack, ready }) {
   return (
     <main
       className="az-fade-in"
@@ -133,31 +153,16 @@ function StartScreen({ highScore, onStart, onBack, ready }) {
         Tap the character that matches the idiom!
       </p>
 
-      {highScore > 0 && (
-        <div style={{
-          marginTop: 22,
-          background: "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
-          color: "#fff",
-          borderRadius: 16,
-          padding: "10px 18px",
-          display: "inline-flex", alignItems: "center", gap: 8,
-          fontFamily: "var(--font-display)",
-          fontWeight: 700, fontSize: 15,
-          boxShadow: "var(--shadow-glow-sun)",
-        }}>
-          🏆 High score: <strong style={{ fontSize: 18 }}>{highScore}</strong>
-        </div>
-      )}
-
       <div style={{
         marginTop: 28,
-        display: "flex", flexDirection: "column", gap: 12,
+        display: "flex", flexDirection: "column", gap: 14,
         width: "100%",
-        maxWidth: 320,
+        maxWidth: 340,
         alignItems: "stretch",
       }}>
+        {/* Classic */}
         <button
-          onClick={onStart}
+          onClick={() => onStart("classic")}
           disabled={!ready}
           className="az-tap"
           style={{
@@ -166,21 +171,58 @@ function StartScreen({ highScore, onStart, onBack, ready }) {
               : "#E5E7EB",
             color: ready ? "#fff" : "#9CA3AF",
             border: "none",
-            padding: "18px 30px",
+            padding: "16px 24px",
             borderRadius: 20,
             fontFamily: "var(--font-display)",
             fontWeight: 700, fontSize: 22,
             cursor: ready ? "pointer" : "default",
             boxShadow: ready ? "var(--shadow-glow-coral)" : "none",
             minHeight: 64,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
           }}
         >
-          {ready ? "▶ Play" : "Loading…"}
+          <span>{ready ? "▶ Classic" : "Loading…"}</span>
+          {ready && (
+            <span style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.9 }}>
+              14 rounds · 3 lives{highScore > 0 ? ` · 🏆 ${highScore}` : ""}
+            </span>
+          )}
         </button>
+
+        {/* Turbo — danger gradient */}
+        <button
+          onClick={() => onStart("turbo")}
+          disabled={!ready}
+          className="az-tap"
+          style={{
+            background: ready
+              ? "linear-gradient(135deg, #F97316, #DC2626)"
+              : "#E5E7EB",
+            color: ready ? "#fff" : "#9CA3AF",
+            border: "none",
+            padding: "16px 24px",
+            borderRadius: 20,
+            fontFamily: "var(--font-display)",
+            fontWeight: 700, fontSize: 22,
+            cursor: ready ? "pointer" : "default",
+            boxShadow: ready ? "0 8px 24px rgba(220, 38, 38, 0.5)" : "none",
+            minHeight: 64,
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+          }}
+        >
+          <span>⚡ Turbo</span>
+          {ready && (
+            <span style={{ fontSize: 11.5, fontWeight: 600, opacity: 0.95 }}>
+              Endless · 1 life · faster &amp; faster{turboHigh > 0 ? ` · 🏆 ${turboHigh}` : ""}
+            </span>
+          )}
+        </button>
+
         <button
           onClick={onBack}
           className="az-tap"
           style={{
+            marginTop: 4,
             background: "transparent",
             color: "var(--color-text)",
             border: "2px solid var(--color-line)",
@@ -197,14 +239,18 @@ function StartScreen({ highScore, onStart, onBack, ready }) {
 }
 
 // ─── End screen ──────────────────────────
-function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
+function EndScreen({ score, highScore, newHigh, gameMode, correctCount, speedLevel, onPlay, onBack, onViewFame }) {
+  const isTurbo = gameMode === "turbo";
+  const postMode = isTurbo ? "catch_turbo" : "catch";
+
   let message, emoji;
-  if (newHigh) { message = "Amazing!"; emoji = "🏆"; }
+  if (isTurbo) { message = "Game Over!"; emoji = "💥"; }
+  else if (newHigh) { message = "Amazing!"; emoji = "🏆"; }
   else if (score >= 250) { message = "Great job!"; emoji = "🌟"; }
   else if (score >= 100) { message = "Nice catching!"; emoji = "💪"; }
   else { message = "Keep practising!"; emoji = "🌱"; }
 
-  const COOLDOWN_KEY = "azidioms_last_post_catch_at";
+  const COOLDOWN_KEY = isTurbo ? "azidioms_last_post_catch_turbo_at" : "azidioms_last_post_catch_at";
   const readCooldownRemaining = () => {
     try {
       const raw = localStorage.getItem(COOLDOWN_KEY);
@@ -256,7 +302,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
 
   const handlePost = async () => {
     if (!canPost) return;
-    const check = validatePost({ name: trimmed, score, mode: "catch" });
+    const check = validatePost({ name: trimmed, score, mode: postMode });
     if (!check.ok) {
       setRejectReason(check.reason);
       setPostState("rejected");
@@ -268,7 +314,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
       const cleanName = check.name;
       const { error } = await supabase
         .from("scores")
-        .insert({ name: cleanName, score, mode: "catch" });
+        .insert({ name: cleanName, score, mode: postMode });
       if (error) throw error;
       savePlayerName(cleanName);
       setPostedName(cleanName);
@@ -286,7 +332,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
 
   return (
     <main
-      className="az-fade-in"
+      className={isTurbo ? "az-fade-in catch-gameover-shake" : "az-fade-in"}
       style={{
         minHeight: "calc(100dvh - 70px)",
         width: "100%",
@@ -298,15 +344,16 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
         textAlign: "center",
       }}
     >
-      <div className="az-pop-in" aria-hidden="true" style={{ fontSize: 80, lineHeight: 1 }}>
+      <div className="az-pop-in" aria-hidden="true" style={{ fontSize: isTurbo ? 88 : 80, lineHeight: 1 }}>
         {emoji}
       </div>
       <h1 style={{
         fontFamily: "var(--font-display)",
-        fontSize: "clamp(28px, 7vw, 36px)",
-        color: "var(--color-text)",
+        fontSize: isTurbo ? "clamp(32px, 8.5vw, 44px)" : "clamp(28px, 7vw, 36px)",
+        color: isTurbo ? "#EF4444" : "var(--color-text)",
         margin: "6px 0 0",
-      }}>{message}</h1>
+        letterSpacing: isTurbo ? "0.5px" : undefined,
+      }}>{isTurbo ? "💥 Game Over!" : message}</h1>
 
       <div style={{
         marginTop: 18,
@@ -331,6 +378,32 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
           lineHeight: 1,
           marginTop: 4,
         }}>{score}</div>
+
+        {isTurbo && (
+          <div style={{
+            marginTop: 14,
+            display: "flex",
+            justifyContent: "center",
+            gap: 10,
+          }}>
+            <div style={{
+              background: "var(--color-card-soft)",
+              borderRadius: 12,
+              padding: "8px 14px",
+              fontFamily: "var(--font-display)",
+              fontWeight: 700, fontSize: 13,
+              color: "var(--color-text)",
+            }}>✅ {correctCount} correct</div>
+            <div style={{
+              background: "linear-gradient(135deg, #F97316, #DC2626)",
+              borderRadius: 12,
+              padding: "8px 14px",
+              fontFamily: "var(--font-display)",
+              fontWeight: 700, fontSize: 13,
+              color: "#fff",
+            }}>⚡ Speed: Level {speedLevel}</div>
+          </div>
+        )}
 
         {newHigh && (
           <div style={{
@@ -472,7 +545,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
                 marginBottom: 10,
               }}>✅ Posted!</div>
               <button
-                onClick={() => onViewFame && onViewFame({ name: postedName, score })}
+                onClick={() => onViewFame && onViewFame({ name: postedName, score, mode: gameMode })}
                 className="az-tap"
                 style={{
                   width: "100%",
@@ -502,7 +575,9 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
           onClick={onPlay}
           className="az-tap"
           style={{
-            background: "linear-gradient(135deg, #EF6F5C, #DC2626)",
+            background: isTurbo
+              ? "linear-gradient(135deg, #F97316, #DC2626)"
+              : "linear-gradient(135deg, #EF6F5C, #DC2626)",
             color: "#fff",
             border: "none",
             padding: "16px 24px",
@@ -510,10 +585,10 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
             fontFamily: "var(--font-display)",
             fontWeight: 700, fontSize: 17,
             cursor: "pointer",
-            boxShadow: "var(--shadow-glow-coral)",
+            boxShadow: isTurbo ? "0 8px 24px rgba(220, 38, 38, 0.5)" : "var(--shadow-glow-coral)",
             minHeight: 56,
           }}
-        >▶ Play again</button>
+        >{isTurbo ? "▶ Try Again" : "▶ Play again"}</button>
         <button
           onClick={onBack}
           className="az-tap"
@@ -553,8 +628,12 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const [floaters, setFloaters] = useState([]);
   const [flash, setFlash] = useState(null);   // { kind: 'correct' | 'wrong', key }
   const [confetti, setConfetti] = useState([]);
+  const [bonusTexts, setBonusTexts] = useState([]); // floating speed-bonus labels
   const [highScore, setHighScore] = useState(loadHigh);
+  const [highScoreTurbo, setHighScoreTurbo] = useState(loadHighTurbo);
   const [newHigh, setNewHigh] = useState(false);
+  const [gameMode, setGameMode] = useState("classic"); // 'classic' | 'turbo'
+  const [correctCount, setCorrectCount] = useState(0);  // turbo HUD + results
 
   const playAreaRef = useRef(null);
   const floaterRefs = useRef({});
@@ -571,6 +650,10 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const advanceTimerRef = useRef(null);
   const flashClearTimerRef = useRef(null);
   const confettiTimersRef = useRef(new Set());
+  const bonusTimersRef = useRef(new Set());
+  const gameModeRef = useRef("classic");
+  const correctCountRef = useRef(0);
+  const promptStartTimeRef = useRef(0);         // when the current prompt appeared (for speed bonus)
 
   // Sync refs with state so RAF / setInterval closures see current values
   useEffect(() => { floatersRef.current = floaters; }, [floaters]);
@@ -578,44 +661,69 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   useEffect(() => { promptIdxRef.current = promptIdx; }, [promptIdx]);
   useEffect(() => { scoreRef.current = score; }, [score]);
   useEffect(() => { comboRef.current = combo; }, [combo]);
+  useEffect(() => { gameModeRef.current = gameMode; }, [gameMode]);
+  useEffect(() => { correctCountRef.current = correctCount; }, [correctCount]);
 
   const ready = cutouts && cutouts.length > 0;
   const currentIdiom = shuffled[promptIdx];
   const promptText = currentIdiom ? currentIdiom.name : "";
 
+  // Turbo ramp helpers — read from refs so the RAF / spawn closures stay current.
+  const turboSteps = () => (gameModeRef.current === "turbo"
+    ? Math.floor(correctCountRef.current / TURBO_RAMP_EVERY)
+    : 0);
+  const currentDuration = () => Math.max(
+    TURBO_DURATION_MIN, DURATION_SEC - TURBO_DURATION_STEP * turboSteps()
+  );
+  const currentSpawnMs = () => Math.max(
+    TURBO_SPAWN_MIN, SPAWN_MS - TURBO_SPAWN_STEP * turboSteps()
+  );
+  const speedLevel = Math.floor(correctCount / TURBO_RAMP_EVERY) + 1;
+
   // ── Lifecycle: startGame ───────────────
-  const startGame = useCallback(() => {
+  // mode defaults to "classic" so an accidental no-arg call is safe.
+  const startGame = useCallback((mode = "classic") => {
+    const m = mode === "turbo" ? "turbo" : "classic";
     getAudioCtx(); // create / resume audio context inside the user gesture
+    setGameMode(m);
+    gameModeRef.current = m;
     setShuffled(shuffle(idioms));
     setScore(0);
     setCombo(1);
-    setLives(LIVES_START);
+    setLives(m === "turbo" ? 1 : LIVES_START); // Turbo = one life, wrong = instant over
     setPromptIdx(0);
     setFloaters([]);
     setFlash(null);
     setConfetti([]);
+    setBonusTexts([]);
     setNewHigh(false);
+    setCorrectCount(0);
+    correctCountRef.current = 0;
     tappedKeysRef.current = new Set();
     scoreRef.current = 0;
     comboRef.current = 1;
     spawnsSinceCorrectRef.current = 0;
     lockedRef.current = false;
+    promptStartTimeRef.current = performance.now();
     setPhase("playing");
   }, [idioms]);
 
   // ── Lifecycle: finishGame ───────────────
   const finishGame = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
-    if (spawnTimerRef.current) { clearInterval(spawnTimerRef.current); spawnTimerRef.current = null; }
+    if (spawnTimerRef.current) { clearTimeout(spawnTimerRef.current); spawnTimerRef.current = null; }
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (flashClearTimerRef.current) { clearTimeout(flashClearTimerRef.current); flashClearTimerRef.current = null; }
     cancelAudio();
     setFloaters([]);
     setFlash(null);
     const final = scoreRef.current;
-    setHighScore((h) => {
+    const isTurbo = gameModeRef.current === "turbo";
+    const setHigh = isTurbo ? setHighScoreTurbo : setHighScore;
+    const key = isTurbo ? HIGHSCORE_TURBO_KEY : HIGHSCORE_KEY;
+    setHigh((h) => {
       if (final > h) {
-        saveHigh(final);
+        saveHighFor(key, final);
         setNewHigh(true);
         return final;
       }
@@ -624,17 +732,28 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     setPhase("over");
   }, []);
 
-  // ── On prompt change: play the audio. On completion: finish. ──
+  // ── On prompt change: play the audio. On completion: finish (Classic) or
+  //    recycle a fresh shuffled batch (Turbo, endless). ──
   useEffect(() => {
     if (phase !== "playing") return;
-    if (promptIdx >= PROMPTS_PER_ROUND) {
+    if (shuffled.length === 0) return;
+    if (gameMode !== "turbo" && promptIdx >= PROMPTS_PER_ROUND) {
       finishGame();
       return;
     }
+    // Turbo: ran through the current batch — reshuffle and keep going.
+    if (promptIdx >= shuffled.length) {
+      const next = shuffle(idioms);
+      shuffledRef.current = next;
+      setShuffled(next);
+      setPromptIdx(0);
+      return; // effect re-runs with the new batch / index
+    }
     const idiom = shuffled[promptIdx];
     if (!idiom) return;
+    promptStartTimeRef.current = performance.now(); // reset the speed-bonus timer
     playForIdiom(idiom, "name");
-  }, [phase, promptIdx, shuffled, finishGame]);
+  }, [phase, promptIdx, shuffled, gameMode, idioms, finishGame]);
 
   // ── Spawn loop: a new floater drifts in from the right every SPAWN_MS ──
   useEffect(() => {
@@ -666,6 +785,11 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
         spawnsSinceCorrectRef.current++;
       }
 
+      // Crossing time for THIS floater, captured at spawn. In Turbo it shrinks
+      // as the speed level climbs; in Classic it's always DURATION_SEC. Storing
+      // it per-floater keeps already-airborne characters at their own pace.
+      const duration = currentDuration();
+
       // Pick a Y that doesn't overlap a recently-spawned floater (only those
       // still near the right edge can collide in X with this new one).
       const now = performance.now();
@@ -677,7 +801,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
         const conflict = floatersRef.current.some((f) => {
           if (tappedKeysRef.current.has(f.key)) return false;
           const elapsed = (now - f.startTime) / 1000;
-          const progress = elapsed / DURATION_SEC;
+          const progress = elapsed / (f.duration || DURATION_SEC);
           if (progress > 0.22) return false; // already moved far enough left
           return Math.abs(f.yPercent - trial) < minSepRatio;
         });
@@ -691,17 +815,24 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
         yPercent,
         phaseOffset: Math.random() * Math.PI * 2,
         startTime: now,
+        duration,
       };
 
       setFloaters((prev) => [...prev, newFloater]);
     };
 
     doSpawn(); // first floater appears immediately
-    spawnTimerRef.current = setInterval(doSpawn, SPAWN_MS);
+    // Self-rescheduling timeout (not setInterval) so the cadence can tighten
+    // mid-game as Turbo speeds up — each tick re-reads currentSpawnMs().
+    const tick = () => {
+      doSpawn();
+      spawnTimerRef.current = setTimeout(tick, currentSpawnMs());
+    };
+    spawnTimerRef.current = setTimeout(tick, currentSpawnMs());
 
     return () => {
       if (spawnTimerRef.current) {
-        clearInterval(spawnTimerRef.current);
+        clearTimeout(spawnTimerRef.current);
         spawnTimerRef.current = null;
       }
     };
@@ -732,7 +863,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
         if (!node) return;
 
         const elapsed = (now - f.startTime) / 1000;
-        const progress = elapsed / DURATION_SEC;
+        const progress = elapsed / (f.duration || DURATION_SEC);
         if (progress >= 1) {
           // Off the left edge — silently remove (no life lost).
           tappedKeysRef.current.add(f.key);
@@ -795,16 +926,41 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     confettiTimersRef.current.add(t);
   }, []);
 
+  // ── Speed-bonus floating text ────────────
+  const spawnBonusText = useCallback((key, label, color) => {
+    if (!label) return;
+    const node = floaterRefs.current[key];
+    const playArea = playAreaRef.current;
+    if (!node || !playArea) return;
+    const rect = node.getBoundingClientRect();
+    const paRect = playArea.getBoundingClientRect();
+    const cx = rect.left - paRect.left + rect.width / 2;
+    const cy = rect.top - paRect.top + rect.height * 0.25;
+    const id = `b-${key}-${Date.now()}`;
+    setBonusTexts((prev) => [...prev, { id, x: cx, y: cy, label, color }]);
+    const t = setTimeout(() => {
+      bonusTimersRef.current.delete(t);
+      setBonusTexts((prev) => prev.filter((b) => b.id !== id));
+    }, 800);
+    bonusTimersRef.current.add(t);
+  }, []);
+
   // ── Tap handlers ──
   const handleCorrect = useCallback((floater) => {
     lockedRef.current = true;
     tappedKeysRef.current.add(floater.key);
     const c = comboRef.current;
-    setScore((s) => s + 10 * c);
+    // Speed bonus: faster taps (since the prompt appeared) earn more.
+    const elapsed = (performance.now() - promptStartTimeRef.current) / 1000;
+    const bonus = speedBonusFor(elapsed);
+    setScore((s) => s + 10 * c + bonus.points);
     setCombo(c + 1);
     comboRef.current = c + 1;
+    setCorrectCount((n) => n + 1);
+    correctCountRef.current += 1;
     correctSound();
     spawnConfetti(floater.key);
+    spawnBonusText(floater.key, bonus.label, bonus.color);
     setFlash({ kind: "correct", key: floater.key });
 
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
@@ -816,7 +972,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
       lockedRef.current = false;
       setPromptIdx((p) => p + 1);
     }, NEXT_AFTER_CORRECT_MS);
-  }, [spawnConfetti]);
+  }, [spawnConfetti, spawnBonusText]);
 
   const handleWrong = useCallback((floater) => {
     tappedKeysRef.current.add(floater.key);
@@ -855,13 +1011,17 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
 
   // ── Cleanup on unmount ─────────────────
   useEffect(() => {
+    const confettiTimers = confettiTimersRef.current;
+    const bonusTimers = bonusTimersRef.current;
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      if (spawnTimerRef.current) clearInterval(spawnTimerRef.current);
+      if (spawnTimerRef.current) clearTimeout(spawnTimerRef.current);
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
       if (flashClearTimerRef.current) clearTimeout(flashClearTimerRef.current);
-      confettiTimersRef.current.forEach((t) => clearTimeout(t));
-      confettiTimersRef.current.clear();
+      confettiTimers.forEach((t) => clearTimeout(t));
+      confettiTimers.clear();
+      bonusTimers.forEach((t) => clearTimeout(t));
+      bonusTimers.clear();
       cancelAudio();
     };
   }, []);
@@ -871,6 +1031,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     return (
       <StartScreen
         highScore={highScore}
+        turboHigh={highScoreTurbo}
         ready={ready}
         onStart={startGame}
         onBack={onBack}
@@ -881,9 +1042,12 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     return (
       <EndScreen
         score={score}
-        highScore={highScore}
+        highScore={gameMode === "turbo" ? highScoreTurbo : highScore}
         newHigh={newHigh}
-        onPlay={startGame}
+        gameMode={gameMode}
+        correctCount={correctCount}
+        speedLevel={speedLevel}
+        onPlay={() => startGame(gameMode)}
         onBack={onBack}
         onViewFame={onViewFame}
       />
@@ -891,15 +1055,22 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   }
 
   // phase === "playing" — full-screen game overlay
+  const isTurbo = gameMode === "turbo";
+  // 0 → 1 as the Turbo speed level climbs; drives the reddening background +
+  // speed-line intensity so the kid FEELS the acceleration.
+  const turboIntensity = isTurbo ? Math.min(1, (speedLevel - 1) / 8) : 0;
   return (
     <div style={{
       position: "fixed",
       inset: 0,
-      background: "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
+      background: isTurbo
+        ? `linear-gradient(180deg, rgba(${40 + turboIntensity * 90}, ${20 + turboIntensity * 10}, 16, 1) 0%, var(--color-cream) 100%)`
+        : "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
       display: "flex",
       flexDirection: "column",
       zIndex: 60,
       overflow: "hidden",
+      transition: "background 600ms var(--ease-out)",
     }}>
       {/* HUD */}
       <div style={{
@@ -946,12 +1117,31 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
           )}
         </div>
 
-        <div style={{
-          fontSize: 18, letterSpacing: 1.5, textAlign: "right",
-          whiteSpace: "nowrap",
-        }} aria-label={`${lives} lives remaining`}>
-          {"❤️".repeat(lives) + "🤍".repeat(Math.max(0, LIVES_START - lives))}
-        </div>
+        {isTurbo ? (
+          <div style={{
+            textAlign: "right",
+            whiteSpace: "nowrap",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: 1,
+          }} aria-label={`Speed level ${speedLevel}, ${lives} life remaining`}>
+            <span style={{
+              fontFamily: "var(--font-display)",
+              fontSize: 14, fontWeight: 800,
+              color: "#FB923C",
+              lineHeight: 1,
+            }}>⚡ Lv.{speedLevel}</span>
+            <span style={{ fontSize: 15, lineHeight: 1 }}>{lives > 0 ? "❤️" : "🤍"}</span>
+          </div>
+        ) : (
+          <div style={{
+            fontSize: 18, letterSpacing: 1.5, textAlign: "right",
+            whiteSpace: "nowrap",
+          }} aria-label={`${lives} lives remaining`}>
+            {"❤️".repeat(lives) + "🤍".repeat(Math.max(0, LIVES_START - lives))}
+          </div>
+        )}
       </div>
 
       {/* Play area */}
@@ -963,6 +1153,21 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
           overflow: "hidden",
         }}
       >
+        {/* Turbo speed lines — intensify with the speed level */}
+        {isTurbo && !reducedMotion() && (
+          <div
+            className="catch-speed-lines"
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              inset: 0,
+              opacity: 0.04 + turboIntensity * 0.14,
+              pointerEvents: "none",
+              zIndex: 0,
+            }}
+          />
+        )}
+
         {floaters.map((floater) => {
           const cutout = cutouts.find((c) => c.id === floater.idiomId);
           const idiom = idioms.find((i) => i.id === floater.idiomId);
@@ -1044,6 +1249,27 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
               willChange: "transform, opacity",
             }}
           />
+        ))}
+
+        {/* Speed-bonus floating text */}
+        {bonusTexts.map((b) => (
+          <span
+            key={b.id}
+            className="catch-bonus-float"
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              left: b.x, top: b.y,
+              color: b.color || "#fff",
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: 18,
+              textShadow: "0 2px 6px rgba(0,0,0,0.55)",
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+              zIndex: 4,
+            }}
+          >{b.label}</span>
         ))}
 
         {/* Quit button — sits inside play area so it doesn't reposition the HUD */}

@@ -544,7 +544,7 @@ function GameRoom({ onNav }) {
       p: "catch",
       icon: "🎯",
       title: "Catch",
-      desc: "Tap the right character before it floats away.",
+      desc: "Classic or ⚡ Turbo — tap the right character!",
       gradient: "linear-gradient(135deg, #EF6F5C, #DC2626)",
       glow: "var(--shadow-glow-coral)",
     },
@@ -758,6 +758,7 @@ function WallOfFame({ onNav, initialTab, highlight }) {
       }}>
         {[
           { id: "catch", label: "🎯 Catch" },
+          { id: "catch_turbo", label: "⚡ Turbo" },
           { id: "challenge", label: "🧠 Quiz" },
           { id: "hangman", label: "🔤 Hangman" },
         ].map((tab) => {
@@ -776,13 +777,14 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                   : "transparent",
                 color: isActive ? "#fff" : "var(--color-text)",
                 border: "none",
-                padding: "10px 8px",
+                padding: "10px 4px",
                 borderRadius: 10,
                 fontFamily: "var(--font-display)",
                 fontWeight: 700,
-                fontSize: 14,
+                fontSize: "clamp(11px, 3.2vw, 14px)",
                 cursor: "pointer",
                 boxShadow: isActive ? "var(--shadow-sm)" : "none",
+                whiteSpace: "nowrap",
                 WebkitTapHighlightColor: "transparent",
               }}
             >{tab.label}</button>
@@ -838,6 +840,11 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                 emoji: "🎯",
                 bg:    "linear-gradient(135deg, #EF6F5C, #DC2626)",
                 glow:  "var(--shadow-glow-coral)" }
+            : activeTab === "catch_turbo"
+            ? { dest: "catch",   label: "⚡ Play Turbo",
+                emoji: "⚡",
+                bg:    "linear-gradient(135deg, #F97316, #DC2626)",
+                glow:  "0 8px 22px rgba(220, 38, 38, 0.45)" }
             : activeTab === "hangman"
             ? { dest: "hangman", label: "🔤 Play Hangman",
                 emoji: "🔤",
@@ -990,6 +997,10 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                   ? { dest: "catch",   label: "🎯 Play Catch",
                       bg:   "linear-gradient(135deg, #EF6F5C, #DC2626)",
                       glow: "var(--shadow-glow-coral)" }
+                  : activeTab === "catch_turbo"
+                  ? { dest: "catch",   label: "⚡ Play Turbo",
+                      bg:   "linear-gradient(135deg, #F97316, #DC2626)",
+                      glow: "0 8px 22px rgba(220, 38, 38, 0.45)" }
                   : activeTab === "hangman"
                   ? { dest: "hangman", label: "🔤 Play Hangman",
                       bg:   "linear-gradient(135deg, #A855F7, #7C3AED)",
@@ -2092,7 +2103,7 @@ export default function App() {
           cutouts={cutouts}
           idioms={IDIOMS}
           onBack={() => handleNav("games")}
-          onViewFame={(hl) => handleNav("leaderboard", { tab: "catch", highlight: hl })}
+          onViewFame={(hl) => handleNav("leaderboard", { tab: hl?.mode === "turbo" ? "catch_turbo" : "catch", highlight: hl })}
           onMusicPause={setMusicPause}
         />
       )}

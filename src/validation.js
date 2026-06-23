@@ -29,9 +29,10 @@ export function containsProfanity(name) {
 
 // Max realistic scores per mode. Anything outside the inclusive range is rejected.
 const SCORE_BOUNDS = {
-  catch:     { min: 0, max: 1400 }, // 14 prompts × 10 × ~10 max realistic combo
-  challenge: { min: 0, max: 520 },  // cumulative across all levels: Easy 140 + Medium 140 + Hard 140 + Boss 100
-  hangman:   { min: 0, max: 140 },  // 14 idioms × 10 max per idiom
+  catch:       { min: 0, max: 2500 },  // 14 prompts × (10 × combo + 20 speed bonus); generous ceiling
+  catch_turbo: { min: 0, max: 99999 }, // endless survival mode — effectively uncapped
+  challenge:   { min: 0, max: 520 },   // cumulative across all levels: Easy 140 + Medium 140 + Hard 140 + Boss 100
+  hangman:     { min: 0, max: 140 },   // 14 idioms × 10 max per idiom
 };
 
 export function isValidScore(score, mode) {

@@ -145,6 +145,53 @@ button { font-family: inherit; }
   100% { transform: translate(var(--dx, 0), var(--dy, 0)) rotate(540deg); opacity: 0; }
 }
 
+/* Speed-bonus floating text — rises and fades from the tapped character. */
+@keyframes catch-bonus-float {
+  0%   { transform: translate(-50%, 0) scale(0.7); opacity: 0; }
+  20%  { transform: translate(-50%, -8px) scale(1.1); opacity: 1; }
+  100% { transform: translate(-50%, -48px) scale(1); opacity: 0; }
+}
+.catch-bonus-float {
+  animation: catch-bonus-float 800ms var(--ease-out) both;
+}
+
+/* Turbo "Game Over" — a sharp screen shake on the results card. */
+@keyframes catch-gameover-shake {
+  0%, 100% { transform: translateX(0); }
+  10%      { transform: translateX(-12px) rotate(-1.2deg); }
+  20%      { transform: translateX(11px) rotate(1deg); }
+  35%      { transform: translateX(-8px) rotate(-0.8deg); }
+  50%      { transform: translateX(7px); }
+  65%      { transform: translateX(-5px); }
+  80%      { transform: translateX(3px); }
+}
+.catch-gameover-shake {
+  animation: catch-gameover-shake 620ms var(--ease-out) both;
+}
+
+/* Turbo speed lines — faint horizontal streaks that sweep right→left.
+   Opacity is driven inline so the effect intensifies with the speed level. */
+@keyframes catch-speed-lines {
+  0%   { background-position: 0 0; }
+  100% { background-position: -200px 0; }
+}
+.catch-speed-lines {
+  background-image: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.18) 0px,
+    rgba(255, 255, 255, 0.18) 2px,
+    transparent 2px,
+    transparent 80px
+  );
+  animation: catch-speed-lines 0.5s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catch-bonus-float { animation-duration: 1ms; }
+  .catch-gameover-shake { animation: none; }
+  .catch-speed-lines { animation: none; }
+}
+
 /* ─── Hangman (Hard / Boss fill questions) ─── */
 /* Snowman stage swap: a brief wobble + settle to draw the eye to the melting. */
 @keyframes snowman-melt {
