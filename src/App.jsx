@@ -668,6 +668,27 @@ function WallOfFame({ onNav, initialTab, highlight }) {
   // Scroll the highlighted row into view once scores load.
   const highlightRef = useRef(null);
 
+  // On the combined Catch board, tag each row with the mode it came from.
+  // `textColor` matches the row's text so the Classic pill stays legible on
+  // both the colored podium and the dark list.
+  const renderModeBadge = (entry, textColor) => {
+    if (activeTab !== "catch") return null;
+    const isTurbo = entry.mode === "catch_turbo";
+    return (
+      <span style={{
+        fontFamily: "var(--font-display)",
+        fontSize: 9.5, fontWeight: 800,
+        letterSpacing: 0.4, textTransform: "uppercase",
+        padding: "1px 6px", borderRadius: 999,
+        lineHeight: 1.5,
+        whiteSpace: "nowrap",
+        color: isTurbo ? "#fff" : textColor,
+        background: isTurbo ? "rgba(217, 70, 70, 0.9)" : "rgba(148, 163, 184, 0.22)",
+        border: isTurbo ? "none" : "1px solid rgba(148, 163, 184, 0.45)",
+      }}>{isTurbo ? "⚡ Turbo" : "Classic"}</span>
+    );
+  };
+
   const fetchScores = useCallback(async (modeArg) => {
     const mode = modeArg || activeTab;
     setStatus("loading");
@@ -760,8 +781,7 @@ function WallOfFame({ onNav, initialTab, highlight }) {
         border: "1px solid var(--color-line)",
       }}>
         {[
-          { id: "catch", label: "🎯 Catch" },
-          { id: "catch_turbo", label: "⚡ Turbo" },
+          { id: "catch", label: "🎮 Catch" },
           { id: "challenge", label: "🧠 Quiz" },
           { id: "hangman", label: "🔤 Hangman" },
         ].map((tab) => {
@@ -839,15 +859,10 @@ function WallOfFame({ onNav, initialTab, highlight }) {
       {status === "ok" && scores.length === 0 && (() => {
         const cta =
           activeTab === "catch"
-            ? { dest: "catch",   label: "🎯 Play Catch",
-                emoji: "🎯",
+            ? { dest: "catch",   label: "🎮 Play Catch",
+                emoji: "🎮",
                 bg:    "linear-gradient(135deg, #EF6F5C, #DC2626)",
                 glow:  "var(--shadow-glow-coral)" }
-            : activeTab === "catch_turbo"
-            ? { dest: "catch",   label: "⚡ Play Turbo",
-                emoji: "⚡",
-                bg:    "linear-gradient(135deg, #F97316, #DC2626)",
-                glow:  "0 8px 22px rgba(220, 38, 38, 0.45)" }
             : activeTab === "hangman"
             ? { dest: "hangman", label: "🔤 Play Hangman",
                 emoji: "🔤",
@@ -918,8 +933,11 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
                     }}>{entry.name}</div>
-                    <div style={{ fontSize: 11, color: c.text, opacity: 0.7, fontWeight: 600 }}>
-                      {relativeDate(entry.created_at)}
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+                      {renderModeBadge(entry, c.text)}
+                      <span style={{ fontSize: 11, color: c.text, opacity: 0.7, fontWeight: 600 }}>
+                        {relativeDate(entry.created_at)}
+                      </span>
                     </div>
                   </div>
                   <div style={{
@@ -978,8 +996,11 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                       }}>{entry.name}</div>
-                      <div style={{ fontSize: 10.5, color: "var(--color-muted)", fontWeight: 600 }}>
-                        {relativeDate(entry.created_at)}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 1 }}>
+                        {renderModeBadge(entry, "var(--color-muted)")}
+                        <span style={{ fontSize: 10.5, color: "var(--color-muted)", fontWeight: 600 }}>
+                          {relativeDate(entry.created_at)}
+                        </span>
                       </div>
                     </div>
                     <div style={{
@@ -997,13 +1018,9 @@ function WallOfFame({ onNav, initialTab, highlight }) {
             {(() => {
               const cta =
                 activeTab === "catch"
-                  ? { dest: "catch",   label: "🎯 Play Catch",
+                  ? { dest: "catch",   label: "🎮 Play Catch",
                       bg:   "linear-gradient(135deg, #EF6F5C, #DC2626)",
                       glow: "var(--shadow-glow-coral)" }
-                  : activeTab === "catch_turbo"
-                  ? { dest: "catch",   label: "⚡ Play Turbo",
-                      bg:   "linear-gradient(135deg, #F97316, #DC2626)",
-                      glow: "0 8px 22px rgba(220, 38, 38, 0.45)" }
                   : activeTab === "hangman"
                   ? { dest: "hangman", label: "🔤 Play Hangman",
                       bg:   "linear-gradient(135deg, #A855F7, #7C3AED)",
@@ -2128,7 +2145,7 @@ export default function App() {
           cutouts={cutouts}
           idioms={IDIOMS}
           onBack={() => handleNav("games")}
-          onViewFame={(hl) => handleNav("leaderboard", { tab: hl?.mode === "turbo" ? "catch_turbo" : "catch", highlight: hl })}
+          onViewFame={(hl) => handleNav("leaderboard", { tab: "catch", highlight: hl })}
           onMusicPause={setMusicPause}
           onTurboMusic={setTurboMusic}
         />
