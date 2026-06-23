@@ -632,6 +632,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const [gameMode, setGameMode] = useState("classic"); // 'classic' | 'turbo'
   const [correctCount, setCorrectCount] = useState(0);  // turbo HUD + results
   const [paused, setPaused] = useState(false);          // turbo pause overlay
+  const [missFlash, setMissFlash] = useState(false);    // brief "❌ Missed!" before turbo game over
 
   // Tell App to pause background music during active Classic play. Turbo never
   // pauses the music — it drives its own ramping volume/rate via onTurboMusic.
@@ -663,6 +664,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const pausedRef = useRef(false);              // RAF / spawn skip-gate while paused
   const pauseStartRef = useRef(0);              // wall-clock when the pause began
   const spawnTickRef = useRef(null);            // spawn scheduler, exposed so resume can restart it
+  const missPendingRef = useRef(false);         // turbo: a missed-correct game over is already scheduled
 
   // Sync refs with state so RAF / setInterval closures see current values
   useEffect(() => { floatersRef.current = floaters; }, [floaters]);
@@ -760,6 +762,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     lockedRef.current = false;
     pausedRef.current = false;
     setPaused(false);
+    missPendingRef.current = false;
+    setMissFlash(false);
     promptStartTimeRef.current = performance.now();
     setPhase("playing");
   }, [idioms]);
@@ -773,6 +777,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     cancelAudio();
     pausedRef.current = false;
     setPaused(false);
+    setMissFlash(false);
     setFloaters([]);
     setFlash(null);
     const final = scoreRef.current;
@@ -789,6 +794,21 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     });
     setPhase("over");
   }, []);
+
+  // ── Turbo: the current correct character floated off un-tapped → game over.
+  // Shows a brief "❌ Missed!" flash, then the same end screen as a wrong tap.
+  const handleTurboMiss = useCallback(() => {
+    if (missPendingRef.current) return;
+    missPendingRef.current = true;
+    lockedRef.current = true;        // ignore taps / block any advance during the flash
+    wrongSound();
+    setMissFlash(true);
+    if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
+    advanceTimerRef.current = setTimeout(() => {
+      advanceTimerRef.current = null;
+      finishGame();
+    }, 500);
+  }, [finishGame]);
 
   // ── On prompt change: play the audio. On completion: finish (Classic) or
   //    recycle a fresh shuffled batch (Turbo, endless). ──
@@ -934,9 +954,18 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
         const elapsed = (now - f.startTime) / 1000;
         const progress = elapsed / (f.duration || DURATION_SEC);
         if (progress >= 1) {
-          // Off the left edge — silently remove (no life lost).
+          // Off the left edge — silently remove (no life lost in Classic).
           tappedKeysRef.current.add(f.key);
           exited.push(f.key);
+          // Turbo only: letting the CURRENT correct character escape ends the
+          // game. lockedRef guards the post-correct-tap window so a just-answered
+          // prompt's leftover correct floater doesn't count as a miss.
+          if (gameModeRef.current === "turbo" && !lockedRef.current && !missPendingRef.current) {
+            const correct = shuffledRef.current[promptIdxRef.current];
+            if (correct && f.idiomId === correct.id) {
+              handleTurboMiss();
+            }
+          }
           return;
         }
         const x = playW - totalDist * progress;
@@ -1362,6 +1391,31 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
             }}
           >{b.label}</span>
         ))}
+
+        {/* Turbo "Missed!" flash — shown briefly before the game over screen */}
+        {missFlash && (
+          <div
+            aria-live="assertive"
+            className="catch-shake-wrong"
+            style={{
+              position: "absolute",
+              top: "42%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              fontFamily: "var(--font-display)",
+              fontWeight: 800,
+              fontSize: "clamp(28px, 9vw, 44px)",
+              color: "#fff",
+              background: "rgba(220, 38, 38, 0.92)",
+              padding: "12px 26px",
+              borderRadius: 18,
+              boxShadow: "0 8px 28px rgba(220, 38, 38, 0.55)",
+              whiteSpace: "nowrap",
+              pointerEvents: "none",
+              zIndex: 15,
+            }}
+          >❌ Missed!</div>
+        )}
 
         {/* Quit button — sits inside play area so it doesn't reposition the HUD */}
         <button
