@@ -650,10 +650,23 @@ const PODIUM_STYLES = [
 ];
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-function WallOfFame({ onNav }) {
+function WallOfFame({ onNav, initialTab, highlight }) {
   const [status, setStatus] = useState("loading"); // 'loading'|'ok'|'error'|'unconfigured'
   const [scores, setScores] = useState([]);
-  const [activeTab, setActiveTab] = useState("catch"); // 'catch' | 'challenge' | 'hangman'
+  const [activeTab, setActiveTab] = useState(initialTab || "catch"); // 'catch' | 'challenge' | 'hangman'
+
+  // Does this row match the player's just-posted score? (same name + score,
+  // posted within the last 60s). Only highlights on the tab it was posted to.
+  const isHighlighted = useCallback((entry) => {
+    if (!highlight || !entry) return false;
+    if (entry.name !== highlight.name) return false;
+    if (Number(entry.score) !== Number(highlight.score)) return false;
+    const t = new Date(entry.created_at).getTime();
+    return Number.isFinite(t) && Date.now() - t < 60_000;
+  }, [highlight]);
+
+  // Scroll the highlighted row into view once scores load.
+  const highlightRef = useRef(null);
 
   const fetchScores = useCallback(async (modeArg) => {
     const mode = modeArg || activeTab;
@@ -681,8 +694,25 @@ function WallOfFame({ onNav }) {
 
   useEffect(() => { fetchScores(activeTab); }, [fetchScores, activeTab]);
 
+  // Once scores render with a highlighted row, gently scroll it into view.
+  useEffect(() => {
+    if (status !== "ok" || !highlight) return;
+    const t = setTimeout(() => {
+      if (highlightRef.current && highlightRef.current.scrollIntoView) {
+        highlightRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [status, scores, highlight]);
+
   return (
     <main className="az-fade-in" style={{ padding: "22px 16px 44px", maxWidth: 520, margin: "0 auto" }}>
+      <style>{`
+        @keyframes azFameGlow {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.55), 0 0 14px 2px rgba(245, 158, 11, 0.35); }
+          50% { box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.22), 0 0 22px 6px rgba(245, 158, 11, 0.55); }
+        }
+      `}</style>
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -848,16 +878,19 @@ function WallOfFame({ onNav }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 18 }}>
             {scores.slice(0, 3).map((entry, i) => {
               const c = PODIUM_STYLES[i];
+              const hl = isHighlighted(entry);
               return (
                 <div
                   key={entry.id}
+                  ref={hl ? highlightRef : null}
                   style={{
                     background: c.bg,
-                    border: `3px solid ${c.border}`,
+                    border: hl ? "3px solid #F59E0B" : `3px solid ${c.border}`,
                     borderRadius: 22,
                     padding: i === 0 ? "18px 18px" : "14px 16px",
                     display: "flex", alignItems: "center", gap: 14,
                     boxShadow: c.glow,
+                    animation: hl ? "azFameGlow 1.4s ease-in-out infinite" : "none",
                   }}
                 >
                   <span aria-hidden="true" style={{
@@ -903,14 +936,21 @@ function WallOfFame({ onNav }) {
               {scores.slice(3).map((entry, i) => {
                 const rank = i + 4;
                 const striped = i % 2 === 0;
+                const hl = isHighlighted(entry);
                 return (
                   <div
                     key={entry.id}
+                    ref={hl ? highlightRef : null}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
                       padding: "11px 14px",
-                      background: striped ? "var(--color-card-soft)" : "var(--color-card)",
+                      background: hl ? "rgba(245, 158, 11, 0.16)" : striped ? "var(--color-card-soft)" : "var(--color-card)",
                       borderTop: i > 0 ? "1px solid var(--color-line)" : "none",
+                      border: hl ? "2px solid #F59E0B" : undefined,
+                      borderRadius: hl ? 12 : undefined,
+                      animation: hl ? "azFameGlow 1.4s ease-in-out infinite" : "none",
+                      position: hl ? "relative" : undefined,
+                      zIndex: hl ? 1 : undefined,
                     }}
                   >
                     <span style={{
@@ -1602,6 +1642,9 @@ export default function App() {
   const [musicPopupOpen, setMusicPopupOpen] = useState(false);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
   const [cutouts, setCutouts] = useState([]);
+  // Wall of Fame: which tab to open on, and the just-posted entry to highlight.
+  const [fameTab, setFameTab] = useState("catch");          // 'catch' | 'challenge' | 'hangman'
+  const [fameHighlight, setFameHighlight] = useState(null);  // { name, score } | null
 
   // ─── Splash / entry gate ───────────────
   // A fullscreen "Enter" screen shown once per browser tab session. Its button
@@ -1832,7 +1875,14 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onVisibilityChange);
   }, [applyMusicState]);
 
-  const handleNav = (p) => {
+  const handleNav = (p, meta) => {
+    // When opening the Wall of Fame, optionally select a tab and flag the
+    // player's just-posted entry for highlighting. Reset both otherwise so a
+    // stale highlight/tab from an earlier visit doesn't linger.
+    if (p === "leaderboard") {
+      setFameTab(meta?.tab || "catch");
+      setFameHighlight(meta?.highlight || null);
+    }
     setPage(p);
   };
 
@@ -2030,17 +2080,19 @@ export default function App() {
           idioms={IDIOMS}
           cutouts={cutouts}
           onBack={() => handleNav("landing")}
-          onViewFame={() => handleNav("leaderboard")}
+          onViewFame={(hl) => handleNav("leaderboard", { tab: "challenge", highlight: hl })}
           onMusicPause={setMusicPause}
         />
       )}
-      {page === "leaderboard" && <WallOfFame onNav={handleNav} />}
+      {page === "leaderboard" && (
+        <WallOfFame onNav={handleNav} initialTab={fameTab} highlight={fameHighlight} />
+      )}
       {page === "catch" && (
         <Catch
           cutouts={cutouts}
           idioms={IDIOMS}
           onBack={() => handleNav("games")}
-          onViewFame={() => handleNav("leaderboard")}
+          onViewFame={(hl) => handleNav("leaderboard", { tab: "catch", highlight: hl })}
           onMusicPause={setMusicPause}
         />
       )}
@@ -2049,7 +2101,7 @@ export default function App() {
           cutouts={cutouts}
           idioms={IDIOMS}
           onBack={() => handleNav("games")}
-          onViewFame={() => handleNav("leaderboard")}
+          onViewFame={(hl) => handleNav("leaderboard", { tab: "hangman", highlight: hl })}
           onMusicPause={setMusicPause}
         />
       )}

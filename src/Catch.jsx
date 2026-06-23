@@ -221,6 +221,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
   ); // 'idle'|'posting'|'posted'|'error'|'cooldown'|'rejected'
   const [rejectReason, setRejectReason] = useState(null);
   const [cooldownLeft, setCooldownLeft] = useState(() => readCooldownRemaining());
+  const [postedName, setPostedName] = useState(null); // cleaned name actually posted (for WoF highlight)
   const nameInputRef = useRef(null);
 
   // Auto-focus the name input on mount so kids can start typing right away.
@@ -270,6 +271,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
         .insert({ name: cleanName, score, mode: "catch" });
       if (error) throw error;
       savePlayerName(cleanName);
+      setPostedName(cleanName);
       try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
       setPostState("posted");
     } catch (e) {
@@ -470,7 +472,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
                 marginBottom: 10,
               }}>✅ Posted!</div>
               <button
-                onClick={onViewFame}
+                onClick={() => onViewFame && onViewFame({ name: postedName, score })}
                 className="az-tap"
                 style={{
                   width: "100%",

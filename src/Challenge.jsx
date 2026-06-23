@@ -1119,9 +1119,48 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
 
 // ─── Level Results (Easy/Medium/Hard) ──────────
 const LEVEL_PASS_THRESHOLD = 10; // out of 14 — required to unlock the next level
+const CHALLENGE_MAX = 520;       // Easy 140 + Medium 140 + Hard 140 + Boss 100
 
-function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack, onViewFame }) {
-  const points = score * 10; // post on the same 0..(total*10) scale as Boss
+// Small breakdown shown on every results screen above the post card: this
+// level's points, then the running cumulative total that actually gets posted.
+function ScoreTally({ levelName, points, levelMax, cumulative }) {
+  return (
+    <div style={{
+      width: "100%",
+      maxWidth: 380,
+      margin: "0 auto 14px",
+      background: "var(--color-card)",
+      borderRadius: 16,
+      padding: "12px 16px",
+      boxShadow: "var(--shadow-sm)",
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+    }}>
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "baseline",
+        fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14,
+        color: "var(--color-text)",
+      }}>
+        <span>{levelName}</span>
+        <span>{points}/{levelMax}</span>
+      </div>
+      <div style={{ height: 1, background: "var(--color-line)" }} />
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "baseline",
+        fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16,
+        color: "var(--color-sun-deep)",
+      }}>
+        <span>Total so far</span>
+        <span>{cumulative}<span style={{ color: "var(--color-muted)", fontSize: 12, fontWeight: 700 }}> / {CHALLENGE_MAX}</span></span>
+      </div>
+    </div>
+  );
+}
+
+function LevelResults({ level, score, total, passed, cumulative, onContinue, onRetry, onBack, onViewFame }) {
+  const points = score * 10;       // this level's score, 0..(total*10)
+  const levelMax = total * 10;     // 140 for Easy/Medium/Hard
   const stars =
     score === total ? "⭐⭐⭐" :
     score >= Math.ceil(total * 0.7) ? "⭐⭐" :
@@ -1130,6 +1169,10 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
   const next = nextLevel(level);
   const nextDef = next ? levelByid(next) : null;
   const levelDef = levelByid(level);
+
+  // Cumulative breakdown shown above the post card on every results screen:
+  // this level's points, then the running total across all levels so far.
+  const tally = <ScoreTally levelName={levelDef?.name || "Level"} points={points} levelMax={levelMax} cumulative={cumulative} />;
 
   if (!passed) {
     // Below threshold — encourage and offer a retry of the same level
@@ -1175,7 +1218,8 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
           </div>
         </div>
 
-        <PostScoreCard score={points} onViewFame={onViewFame} />
+        {tally}
+        <PostScoreCard score={cumulative} onViewFame={onViewFame} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
           <button
@@ -1250,7 +1294,8 @@ function LevelResults({ level, score, total, passed, onContinue, onRetry, onBack
         </div>
       </div>
 
-      <PostScoreCard score={points} onViewFame={onViewFame} />
+      {tally}
+      <PostScoreCard score={cumulative} onViewFame={onViewFame} />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
         {nextDef && (
@@ -1310,6 +1355,7 @@ function PostScoreCard({ score, onViewFame }) {
   ); // 'idle'|'posting'|'posted'|'error'|'rejected'|'cooldown'
   const [rejectReason, setRejectReason] = useState(null);
   const [cooldownLeft, setCooldownLeft] = useState(() => readCooldownRemaining());
+  const [postedName, setPostedName] = useState(null); // cleaned name actually posted (for WoF highlight)
   const nameInputRef = useRef(null);
 
   useEffect(() => {
@@ -1356,6 +1402,7 @@ function PostScoreCard({ score, onViewFame }) {
         .insert({ name: cleanName, score, mode: "challenge" });
       if (error) throw error;
       savePlayerName(cleanName);
+      setPostedName(cleanName);
       try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
       setPostState("posted");
     } catch (e) {
@@ -1486,7 +1533,7 @@ function PostScoreCard({ score, onViewFame }) {
           }}>✅ Posted!</div>
           {onViewFame && (
             <button
-              onClick={onViewFame}
+              onClick={() => onViewFame({ name: postedName, score })}
               className="az-tap"
               style={{
                 width: "100%",
@@ -1510,9 +1557,11 @@ function PostScoreCard({ score, onViewFame }) {
 // ─── Boss Results ──────────
 const BOSS_PASS_THRESHOLD = 7; // out of 10 — required to mark the Boss as completed
 
-function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
-  // score is correctCount (0..10). Posted as score * 10 for a 0..100 scale.
+function BossResults({ score, total, passed, cumulative, onRetry, onBack, onViewFame }) {
+  // score is correctCount (0..10). This level's points are score × 10 (0..100);
+  // the posted score is the cumulative total across all levels.
   const points = score * 10;
+  const levelMax = total * 10; // 100 for the Boss round
   let title, emoji;
   if (score === total)       { title = "Idiom Master!"; emoji = "👑"; }
   else if (passed)           { title = "Almost there!"; emoji = "🌟"; }
@@ -1576,10 +1625,11 @@ function BossResults({ score, total, passed, onRetry, onBack, onViewFame }) {
           fontSize: 14,
           fontWeight: 700,
           color: "var(--color-sun-deep)",
-        }}>Score: {points}</div>
+        }}>Boss: {points}/{levelMax}</div>
       </div>
 
-      <PostScoreCard score={points} onViewFame={onViewFame} />
+      <ScoreTally levelName="Boss" points={points} levelMax={levelMax} cumulative={cumulative} />
+      <PostScoreCard score={cumulative} onViewFame={onViewFame} />
 
       <div style={{
         display: "flex", flexDirection: "column", gap: 12,
@@ -1636,6 +1686,14 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
   const [questions, setQuestions] = useState([]);
   const [lastScore, setLastScore] = useState(0);
   const [progress, setProgress] = useState(loadProgress);
+  // Best raw correct-count per level this session (e.g. { easy: 12, medium: 9 }).
+  // Cumulative posted score = sum(bestCount) × 10 across all completed levels.
+  // Only the best attempt per level counts; replaying a level replaces its
+  // entry if higher. Lives in component state, so it resets when the player
+  // leaves Challenge entirely (unmount) but survives level-to-level navigation.
+  const [levelScores, setLevelScores] = useState({});
+
+  const cumulativeScore = ORDER.reduce((sum, id) => sum + (levelScores[id] || 0) * 10, 0);
 
   const startLevel = useCallback((levelId) => {
     getAudioCtx(); // initialize audio inside the user-gesture (tap)
@@ -1654,6 +1712,13 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
 
   const handleComplete = useCallback((score) => {
     setLastScore(score);
+    // Record this level's best raw score toward the cumulative total. Keeping
+    // the max means a failed-then-retried level, or a replayed completed level,
+    // only ever raises (never lowers) the running total.
+    setLevelScores((prev) => ({
+      ...prev,
+      [currentLevel]: Math.max(prev[currentLevel] || 0, score),
+    }));
     // Only mark this level completed (and unlock the next) when the kid hit
     // the pass threshold. Boss needs 7/10; the other levels need 5/7.
     const threshold = currentLevel === "boss" ? BOSS_PASS_THRESHOLD : LEVEL_PASS_THRESHOLD;
@@ -1691,6 +1756,7 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
     )) {
       setProgress({});
       saveProgress({});
+      setLevelScores({});
     }
   }, []);
 
@@ -1726,6 +1792,7 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
         score={lastScore}
         total={10}
         passed={passed}
+        cumulative={cumulativeScore}
         onRetry={handleRetry}
         onBack={handleBackToLevels}
         onViewFame={onViewFame}
@@ -1738,6 +1805,7 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
       score={lastScore}
       total={14}
       passed={passed}
+      cumulative={cumulativeScore}
       onContinue={handleContinue}
       onRetry={handleRetry}
       onBack={handleBackToLevels}
