@@ -1491,6 +1491,103 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   );
 }
 
+// ─── Splash / entry screen ─────────────
+// Fullscreen welcome overlay. Its single button is the gesture that starts
+// music and unlocks audio for the session. `hidden` drives the fade-out.
+function SplashScreen({ hidden, onEnter }) {
+  const reduceMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Welcome to AZ Idioms"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 200,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 18,
+        padding: "24px",
+        textAlign: "center",
+        background: "rgba(10, 12, 20, 0.62)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+        opacity: hidden ? 0 : 1,
+        transition: "opacity 400ms ease",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      {/* Wordmark */}
+      <div
+        aria-hidden="true"
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: 20,
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: "rgba(245, 240, 232, 0.78)",
+          marginBottom: 4,
+        }}
+      >
+        AZ Idioms
+      </div>
+
+      {/* Enter button — the music + audio-unlock trigger */}
+      <button
+        onClick={onEnter}
+        className="az-tap"
+        autoFocus
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: 24,
+          color: "#fff",
+          minHeight: 64,
+          padding: "0 40px",
+          borderRadius: 999,
+          border: "none",
+          cursor: "pointer",
+          background: "linear-gradient(180deg, var(--color-sun) 0%, var(--color-sun-deep) 100%)",
+          boxShadow: "0 10px 28px rgba(245, 158, 11, 0.45), inset 0 1px 0 rgba(255,255,255,0.35)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 10,
+          animation: reduceMotion ? "none" : "azSplashPulse 1.8s ease-in-out infinite",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <span aria-hidden="true">🎵</span> Enter
+      </button>
+
+      {/* Tagline */}
+      <div
+        style={{
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+          color: "rgba(245, 240, 232, 0.85)",
+        }}
+      >
+        Tap to start your adventure!
+      </div>
+
+      <style>{`
+        @keyframes azSplashPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 // ─── Main App ──────────────────────────
 
 export default function App() {
@@ -1505,6 +1602,21 @@ export default function App() {
   const [musicPopupOpen, setMusicPopupOpen] = useState(false);
   const [learningIdiomId, setLearningIdiomId] = useState(null);
   const [cutouts, setCutouts] = useState([]);
+
+  // ─── Splash / entry gate ───────────────
+  // A fullscreen "Enter" screen shown once per browser tab session. Its button
+  // is the single, gesture-based trigger that starts the music (iOS-safe) and
+  // unlocks the audio context for TTS / game sounds. Stored in sessionStorage
+  // so in-tab navigations skip it; a fresh load shows it again.
+  const [splashVisible, setSplashVisible] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return sessionStorage.getItem("azidioms_entered") !== "1"; } catch (_) { return true; }
+  });
+  const [splashHidden, setSplashHidden] = useState(false);  // drives the opacity fade-out
+  // Filter applied to the whole site behind the splash. Starts blurred while
+  // the splash is up, transitions to clear on Enter, then fully removed (so it
+  // doesn't create a containing block for the floating fixed buttons).
+  const [contentBlur, setContentBlur] = useState(() => (splashVisible ? "blur(15px)" : "none"));
 
   // Persist musicOff / musicVolume changes alongside the state setter.
   useEffect(() => {
@@ -1649,16 +1761,12 @@ export default function App() {
     try { audio.play().catch(() => { /* swallow autoplay rejection */ }); } catch (_) {}
   }, []);
 
-  // Try to start music immediately on load. If the browser blocks autoplay,
-  // fall back to starting on the first user interaction.
+  // Create the Audio element on mount. Music is NOT started here — the splash
+  // "Enter" button is the single, gesture-based trigger (see handleEnter).
+  // This avoids autoplay-rejection races and silent failures on mobile/iOS.
   useEffect(() => {
     if (typeof window === "undefined") return;
-
-    // Only creates the Audio element + stores the ref. Does NOT call play()
-    // or applyMusicState. That way both the optimistic and the fallback paths
-    // can decide for themselves whether/how to trigger play.
-    const ensureAudio = () => {
-      if (musicStartedRef.current) return;
+    if (!musicStartedRef.current) {
       musicStartedRef.current = true;
       try {
         const a = new Audio("/audio/bg-music.mp3");
@@ -1672,53 +1780,36 @@ export default function App() {
       } catch (e) {
         console.error("Music init failed", e);
       }
-    };
-
-    // Optimistic attempt — desktop browsers usually allow it; mobile usually won't.
-    ensureAudio();
-    const initialAudio = musicRef.current;
-    if (initialAudio) {
-      const p = initialAudio.play();
-      if (p && typeof p.then === "function") {
-        p.then(() => {
-          applyMusicState();
-        }).catch(() => {
-          /* autoplay blocked — fallback listener will start music on first gesture */
-        });
-      }
     }
+    // If the splash was already dismissed this tab session, the audio context
+    // is (usually) unlocked from the earlier gesture — try to resume music.
+    let entered = false;
+    try { entered = sessionStorage.getItem("azidioms_entered") === "1"; } catch (_) { /* ignore */ }
+    if (entered) applyMusicState();
+  }, [applyMusicState]);
 
-    // Fallback: on the first user gesture, start the music UNCONDITIONALLY
-    // and synchronously inside the gesture handler (mobile browsers require
-    // play() to be a direct child of the gesture call stack). Then schedule
-    // applyMusicState() shortly after to apply mute/page/modal volume rules.
-    const handler = () => {
-      ensureAudio();
+  // Splash "Enter" handler — runs inside the button's tap/click gesture.
+  // 1) Start music synchronously (iOS requires play() in the gesture stack),
+  //    unless the music toggle is off. 2) Persist the dismissal. 3) Fade the
+  //    overlay out and clear the blur. 4) After the transition, unmount the
+  //    splash and remove the filter, then settle music volume/mute rules.
+  const handleEnter = useCallback(() => {
+    if (!musicOffRef.current) {
       const audio = musicRef.current;
       if (audio) {
-        // Synchronous play() inside the gesture — this is the key bit.
+        audio.volume = musicVolumeRef.current;
         const p = audio.play();
         if (p && typeof p.catch === "function") p.catch(() => {});
       }
-      // Wait long enough that any tap-on-character flow (handleZoneTap defers
-      // setLearningIdiomId by ~220ms) has propagated before we settle the
-      // state — otherwise the music briefly plays before getting paused when
-      // the modal opens.
-      setTimeout(() => applyMusicState(), 300);
-
-      window.removeEventListener("pointerdown", handler);
-      window.removeEventListener("touchstart", handler);
-      window.removeEventListener("keydown", handler);
-    };
-    window.addEventListener("pointerdown", handler);
-    window.addEventListener("touchstart", handler);
-    window.addEventListener("keydown", handler);
-
-    return () => {
-      window.removeEventListener("pointerdown", handler);
-      window.removeEventListener("touchstart", handler);
-      window.removeEventListener("keydown", handler);
-    };
+    }
+    try { sessionStorage.setItem("azidioms_entered", "1"); } catch (_) { /* ignore */ }
+    setSplashHidden(true);          // fade overlay opacity → 0 (~400ms)
+    setContentBlur("blur(0px)");    // clear the site blur over the same window
+    setTimeout(() => {
+      setSplashVisible(false);      // remove the splash from the DOM
+      setContentBlur("none");       // drop the filter entirely
+      applyMusicState();            // apply mute / page / modal volume rules
+    }, 420);
   }, [applyMusicState]);
 
   // React to page / mute / music-toggle / modal changes: play, pause, or fade.
@@ -1746,9 +1837,12 @@ export default function App() {
   };
 
   return (
+    <>
     <div style={{
       minHeight: "100dvh",
       background: "linear-gradient(180deg, var(--color-cream-deep) 0%, var(--color-cream) 100%)",
+      filter: contentBlur,
+      transition: "filter 400ms ease",
     }}>
       {/* Floating music button — opens the volume / off popup. */}
       <button
@@ -1968,5 +2062,8 @@ export default function App() {
         />
       )}
     </div>
+
+    {splashVisible && <SplashScreen hidden={splashHidden} onEnter={handleEnter} />}
+    </>
   );
 }
