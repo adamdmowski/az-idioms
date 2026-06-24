@@ -83,6 +83,47 @@ function loadProgress() {
 function saveProgress(p) {
   try { localStorage.setItem(PROGRESS_KEY, JSON.stringify(p)); } catch (_) { /* ignore */ }
 }
+
+// ── Cumulative session (survives leaving Challenge for ~2h) ──
+// Stored as POINTS per played level + a timestamp, e.g.
+// { easy: 130, medium: 140, timestamp: 1719... }. Only levels actually played
+// this session get a key, so the results tracker's "played" detection stays
+// correct. Internally levelScores holds raw correct-counts (points / 10).
+const SESSION_KEY = "azidioms_challenge_session";
+const SESSION_MAX_AGE_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+// Returns raw correct-counts keyed by level (points ÷ 10), or {} if missing/stale.
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return {};
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return {};
+    if (!data.timestamp || Date.now() - data.timestamp > SESSION_MAX_AGE_MS) return {};
+    const scores = {};
+    for (const id of ORDER) {
+      if (typeof data[id] === "number") scores[id] = Math.round(data[id] / 10);
+    }
+    return scores;
+  } catch (_) { return {}; }
+}
+
+// Persist the current per-level raw counts as points + a fresh timestamp.
+function saveSession(levelScores) {
+  try {
+    const data = { timestamp: Date.now() };
+    for (const id of ORDER) {
+      if (Object.prototype.hasOwnProperty.call(levelScores, id)) {
+        data[id] = (levelScores[id] || 0) * 10; // store points to match the documented shape
+      }
+    }
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+  } catch (_) { /* ignore */ }
+}
+
+function clearSession() {
+  try { localStorage.removeItem(SESSION_KEY); } catch (_) { /* ignore */ }
+}
 function loadPlayerName() {
   try { return localStorage.getItem(PLAYER_NAME_KEY) || ""; } catch (_) { return ""; }
 }
@@ -1466,16 +1507,19 @@ function LevelResults({ level, score, total, passed, cumulative, levelScores, pr
         </button>
       )}
 
-      {/* Always-visible posting card — name input + Post button shown directly. */}
+      {/* Always-visible posting card — name input + Post button shown directly.
+          Posting auto-navigates to the Wall of Fame; the next-level info rides
+          along in fameMeta so the WoF "Continue to X" pill knows where to go. */}
       <PostScoreCard
         score={cumulative}
         onViewFame={onViewFame}
         note="You can post now or after completing all levels."
-        fameMeta={nextDef ? { canContinue: true, continueGradient: nextDef.gradient } : null}
-        onContinue={nextDef ? onContinue : null}
-        continueLabel={nextDef ? `Continue to ${nextDef.name} →` : null}
-        continueGradient={nextDef?.gradient}
-        continueGlow={nextDef?.glow}
+        fameMeta={nextDef ? {
+          canContinue: true,
+          continueGradient: nextDef.gradient,
+          continueLabel: `Continue to ${nextDef.name} →`,
+          continueLevel: next,
+        } : null}
       />
 
       <button
@@ -1509,10 +1553,6 @@ function PostScoreCard({
   collapsible = false,        // render as a de-emphasised, expandable card (passed levels)
   note = null,                // muted helper text under the Post button
   fameMeta = null,            // extra context merged into the onViewFame payload (e.g. canContinue)
-  onContinue = null,          // when posted, show a "keep going" continue button
-  continueLabel = null,
-  continueGradient = null,
-  continueGlow = null,
 }) {
   const readCooldownRemaining = () => {
     try {
@@ -1530,10 +1570,13 @@ function PostScoreCard({
   ); // 'idle'|'posting'|'posted'|'error'|'rejected'|'cooldown'
   const [rejectReason, setRejectReason] = useState(null);
   const [cooldownLeft, setCooldownLeft] = useState(() => readCooldownRemaining());
-  const [postedName, setPostedName] = useState(null); // cleaned name actually posted (for WoF highlight)
   // Collapsible cards start collapsed so the primary "Continue" button stays dominant.
   const [expanded, setExpanded] = useState(!collapsible);
   const nameInputRef = useRef(null);
+  const navTimerRef = useRef(null); // auto-navigate-to-WoF timer (after posting)
+
+  // Cancel the pending auto-navigation if this card unmounts first.
+  useEffect(() => () => { if (navTimerRef.current) clearTimeout(navTimerRef.current); }, []);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
@@ -1581,9 +1624,15 @@ function PostScoreCard({
       if (error) throw error;
       trackEvent("score_posted", JSON.stringify({ mode: "challenge", score, name: cleanName }));
       savePlayerName(cleanName);
-      setPostedName(cleanName);
       try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
       setPostState("posted");
+      // Show "✅ Posted!" briefly, then take them straight to the Wall of Fame
+      // with their row highlighted (and, if more levels remain, a Continue pill).
+      if (onViewFame) {
+        navTimerRef.current = setTimeout(() => {
+          onViewFame({ name: cleanName, score, ...(fameMeta || {}) });
+        }, 1000);
+      }
     } catch (e) {
       console.error("Post challenge score failed", e);
       setPostState("error");
@@ -1756,49 +1805,13 @@ function PostScoreCard({
             marginBottom: 10,
           }}>✅ Posted!</div>
           {onViewFame && (
-            <button
-              onClick={() => onViewFame({ name: postedName, score, ...(fameMeta || {}) })}
-              className="az-tap"
-              style={{
-                width: "100%",
-                background: "transparent",
-                color: "var(--color-text)",
-                border: "2px solid var(--color-line)",
-                padding: "11px",
-                borderRadius: 12,
-                fontFamily: "var(--font-display)",
-                fontWeight: 700, fontSize: 14,
-                cursor: "pointer",
-              }}
-            >🏆 View Wall of Fame →</button>
-          )}
-          {onContinue && continueLabel && (
-            <div style={{ marginTop: 14, textAlign: "center" }}>
-              <div style={{
-                color: "var(--color-sun-deep)",
-                fontFamily: "var(--font-display)",
-                fontWeight: 800,
-                fontSize: 13.5,
-                marginBottom: 8,
-              }}>Keep going for a higher total!</div>
-              <button
-                onClick={onContinue}
-                className="az-tap"
-                style={{
-                  width: "100%",
-                  background: continueGradient || "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
-                  color: "#fff",
-                  border: "none",
-                  padding: "15px",
-                  borderRadius: 16,
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 800, fontSize: 17,
-                  cursor: "pointer",
-                  boxShadow: continueGlow || "var(--shadow-glow-sun)",
-                  minHeight: 54,
-                }}
-              >{continueLabel}</button>
-            </div>
+            <div style={{
+              textAlign: "center",
+              color: "var(--color-muted)",
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: 12.5,
+            }}>Opening the Wall of Fame…</div>
           )}
         </>
       )}
@@ -1950,7 +1963,7 @@ function BossResults({ score, total, passed, cumulative, levelScores, progress, 
 }
 
 // ─── Main Challenge component ──────────
-export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusicPause }) {
+export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusicPause, startAtLevel }) {
   const [phase, setPhase] = useState("select"); // 'select' | 'play' | 'results'
 
   // Tell App to pause music only during active "play" phase. Select +
@@ -1966,9 +1979,10 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
   // Best raw correct-count per level this session (e.g. { easy: 12, medium: 9 }).
   // Cumulative posted score = sum(bestCount) × 10 across all completed levels.
   // Only the best attempt per level counts; replaying a level replaces its
-  // entry if higher. Lives in component state, so it resets when the player
-  // leaves Challenge entirely (unmount) but survives level-to-level navigation.
-  const [levelScores, setLevelScores] = useState({});
+  // entry if higher. Seeded from (and saved to) localStorage so the running
+  // total survives leaving Challenge — for the Wall of Fame, Catch, etc. — and
+  // coming back within the 2-hour session window.
+  const [levelScores, setLevelScores] = useState(loadSession);
 
   const cumulativeScore = ORDER.reduce((sum, id) => sum + (levelScores[id] || 0) * 10, 0);
 
@@ -2001,10 +2015,11 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
     // Record this level's best raw score toward the cumulative total. Keeping
     // the max means a failed-then-retried level, or a replayed completed level,
     // only ever raises (never lowers) the running total.
-    setLevelScores((prev) => ({
-      ...prev,
-      [currentLevel]: Math.max(prev[currentLevel] || 0, score),
-    }));
+    setLevelScores((prev) => {
+      const updated = { ...prev, [currentLevel]: Math.max(prev[currentLevel] || 0, score) };
+      saveSession(updated); // keep the cumulative total alive across navigation
+      return updated;
+    });
     // Only mark this level completed (and unlock the next) when the kid hit
     // the pass threshold. Boss needs 7/10; the other levels need 5/7.
     const threshold = currentLevel === "boss" ? BOSS_PASS_THRESHOLD : LEVEL_PASS_THRESHOLD;
@@ -2051,8 +2066,20 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
       setProgress({});
       saveProgress({});
       setLevelScores({});
+      clearSession();
     }
   }, []);
+
+  // One-shot: arriving with a level to start (from the Wall of Fame "Continue to
+  // X" pill) launches it directly instead of dropping the kid on level-select.
+  const startConsumedRef = useRef(false);
+  useEffect(() => {
+    if (startConsumedRef.current) return;
+    if (startAtLevel) {
+      startConsumedRef.current = true;
+      startLevel(startAtLevel);
+    }
+  }, [startAtLevel, startLevel]);
 
   if (phase === "select") {
     return (

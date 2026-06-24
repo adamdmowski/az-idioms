@@ -669,17 +669,18 @@ function WallOfFame({ onNav, initialTab, highlight }) {
   // Scroll the highlighted row into view once scores load.
   const highlightRef = useRef(null);
 
-  // "Continue →" pill shown beneath the player's just-posted Challenge row when
-  // there are still levels left to play (set via highlight.canContinue). Tapping
-  // it returns to the Challenge level-select so they can pick the next level.
+  // "Continue to <next> →" pill shown beneath the player's just-posted Challenge
+  // row when levels remain (set via highlight.canContinue). Tapping it jumps
+  // straight into the next level, carrying the level id through handleNav.
   const renderContinuePill = () => {
     if (!highlight?.canContinue) return null;
+    const label = highlight.continueLabel || "Continue →";
     return (
       <div style={{ textAlign: "center", margin: "-2px 0 10px" }}>
         <button
-          onClick={() => onNav("quiz")}
+          onClick={() => onNav("quiz", { startLevel: highlight.continueLevel })}
           className="az-tap"
-          aria-label="Continue to the next Challenge level"
+          aria-label={label}
           style={{
             background: highlight.continueGradient || "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
             color: "#fff",
@@ -693,7 +694,7 @@ function WallOfFame({ onNav, initialTab, highlight }) {
             boxShadow: "var(--shadow-sm)",
             WebkitTapHighlightColor: "transparent",
           }}
-        >Continue →</button>
+        >{label}</button>
       </div>
     );
   };
@@ -1720,6 +1721,8 @@ export default function App() {
   // Wall of Fame: which tab to open on, and the just-posted entry to highlight.
   const [fameTab, setFameTab] = useState("catch");          // 'catch' | 'challenge' | 'hangman'
   const [fameHighlight, setFameHighlight] = useState(null);  // { name, score } | null
+  // A specific Challenge level to launch on entry (from the WoF "Continue" pill).
+  const [challengeStartLevel, setChallengeStartLevel] = useState(null);
 
   // ─── Splash / entry gate ───────────────
   // A fullscreen "Enter" screen shown once per browser tab session. Its button
@@ -1987,6 +1990,11 @@ export default function App() {
       const source = meta?.highlight ? (meta?.tab || "catch") : "direct";
       trackEvent("wall_of_fame_viewed", JSON.stringify({ tab: meta?.tab || "catch", source }));
     }
+    // Optional deep-link into a specific Challenge level (WoF "Continue" pill).
+    // Cleared on any other quiz entry so the level-select isn't auto-skipped.
+    if (p === "quiz") {
+      setChallengeStartLevel(meta?.startLevel || null);
+    }
     if (p === "games" || p === "quiz" || p === "leaderboard") {
       trackEvent("page_visited", JSON.stringify({ page: p }));
     }
@@ -2189,6 +2197,7 @@ export default function App() {
           onBack={() => handleNav("landing")}
           onViewFame={(hl) => handleNav("leaderboard", { tab: "challenge", highlight: hl })}
           onMusicPause={setMusicPause}
+          startAtLevel={challengeStartLevel}
         />
       )}
       {page === "leaderboard" && (
