@@ -1295,42 +1295,75 @@ function LevelResults({ level, score, total, passed, cumulative, onContinue, onR
       </div>
 
       {tally}
-      <PostScoreCard score={cumulative} onViewFame={onViewFame} />
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
-        {nextDef && (
-          <button
-            onClick={onContinue}
-            className="az-tap"
-            style={{
-              background: nextDef.gradient,
-              color: "#fff",
-              border: "none",
-              padding: "16px 24px",
-              borderRadius: 18,
-              fontFamily: "var(--font-display)",
-              fontWeight: 700, fontSize: 17,
-              cursor: "pointer",
-              boxShadow: nextDef.glow,
-              minHeight: 56,
-            }}
-          >Continue to {nextDef.name} →</button>
-        )}
+      {/* Warm nudge: posting isn't the end — keep playing for a bigger total. */}
+      {nextDef && (
+        <p style={{
+          color: "var(--color-sun-deep)",
+          fontFamily: "var(--font-display)",
+          fontSize: 15,
+          fontWeight: 800,
+          lineHeight: 1.4,
+          margin: "0 auto 18px",
+          maxWidth: 340,
+        }}>🎯 Keep going! Complete all levels for a higher total score!</p>
+      )}
+
+      {/* PRIMARY action — the most visually dominant element on the screen. */}
+      {nextDef && (
         <button
-          onClick={onBack}
+          onClick={onContinue}
           className="az-tap"
           style={{
-            background: "var(--color-card)",
-            color: "var(--color-text)",
-            border: "2px solid var(--color-line)",
-            padding: "14px",
-            borderRadius: 16,
+            display: "block",
+            width: "100%",
+            maxWidth: 360,
+            margin: "0 auto 16px",
+            background: nextDef.gradient,
+            color: "#fff",
+            border: "none",
+            padding: "18px 24px",
+            borderRadius: 20,
             fontFamily: "var(--font-display)",
-            fontWeight: 700, fontSize: 15,
+            fontWeight: 800, fontSize: 19,
             cursor: "pointer",
+            boxShadow: nextDef.glow,
+            minHeight: 62,
           }}
-        >← Back to levels</button>
-      </div>
+        >Continue to {nextDef.name} →</button>
+      )}
+
+      {/* SECONDARY — de-emphasised, collapsible posting card. */}
+      <PostScoreCard
+        score={cumulative}
+        onViewFame={onViewFame}
+        collapsible
+        note="You can post now or after completing all levels."
+        fameMeta={nextDef ? { canContinue: true, continueGradient: nextDef.gradient } : null}
+        onContinue={nextDef ? onContinue : null}
+        continueLabel={nextDef ? `Continue to ${nextDef.name} →` : null}
+        continueGradient={nextDef?.gradient}
+        continueGlow={nextDef?.glow}
+      />
+
+      <button
+        onClick={onBack}
+        className="az-tap"
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 320,
+          margin: "0 auto",
+          background: "transparent",
+          color: "var(--color-muted)",
+          border: "none",
+          padding: "10px",
+          fontFamily: "var(--font-display)",
+          fontWeight: 700, fontSize: 14,
+          cursor: "pointer",
+          textDecoration: "underline",
+        }}
+      >← Back to levels</button>
     </main>
   );
 }
@@ -1338,7 +1371,17 @@ function LevelResults({ level, score, total, passed, cumulative, onContinue, onR
 // ─── Shared post-to-Wall-of-Fame card (Phase 5+) ──────────
 // Used by every results screen. Returns null when Supabase isn't configured
 // so the parent doesn't need a guard.
-function PostScoreCard({ score, onViewFame }) {
+function PostScoreCard({
+  score,
+  onViewFame,
+  collapsible = false,        // render as a de-emphasised, expandable card (passed levels)
+  note = null,                // muted helper text under the Post button
+  fameMeta = null,            // extra context merged into the onViewFame payload (e.g. canContinue)
+  onContinue = null,          // when posted, show a "keep going" continue button
+  continueLabel = null,
+  continueGradient = null,
+  continueGlow = null,
+}) {
   const readCooldownRemaining = () => {
     try {
       const raw = localStorage.getItem(COOLDOWN_KEY);
@@ -1356,14 +1399,17 @@ function PostScoreCard({ score, onViewFame }) {
   const [rejectReason, setRejectReason] = useState(null);
   const [cooldownLeft, setCooldownLeft] = useState(() => readCooldownRemaining());
   const [postedName, setPostedName] = useState(null); // cleaned name actually posted (for WoF highlight)
+  // Collapsible cards start collapsed so the primary "Continue" button stays dominant.
+  const [expanded, setExpanded] = useState(!collapsible);
   const nameInputRef = useRef(null);
 
   useEffect(() => {
     if (!supabaseConfigured) return;
     if (postState === "cooldown") return;
+    if (collapsible && !expanded) return; // input isn't rendered while collapsed
     const t = setTimeout(() => { if (nameInputRef.current) nameInputRef.current.focus(); }, 280);
     return () => clearTimeout(t);
-  }, [postState]);
+  }, [postState, collapsible, expanded]);
 
   useEffect(() => {
     if (postState !== "cooldown") return;
@@ -1415,6 +1461,8 @@ function PostScoreCard({ score, onViewFame }) {
     if (e.key === "Enter" && canPost) handlePost();
   };
 
+  const showContent = postState === "posted" || !collapsible || expanded;
+
   return (
     <div style={{
       width: "100%",
@@ -1422,22 +1470,55 @@ function PostScoreCard({ score, onViewFame }) {
       margin: "0 auto 18px",
       background: "var(--color-card)",
       borderRadius: 18,
-      padding: "16px 16px 18px",
-      boxShadow: "var(--shadow-sm)",
+      padding: collapsible ? "12px 14px" : "16px 16px 18px",
+      boxShadow: collapsible ? "none" : "var(--shadow-sm)",
+      border: collapsible ? "1.5px solid var(--color-line)" : "none",
       textAlign: "left",
     }}>
-      <div style={{
-        fontFamily: "var(--font-display)",
-        fontSize: 11,
-        fontWeight: 800,
-        color: "var(--color-muted)",
-        textTransform: "uppercase",
-        letterSpacing: 1.2,
-        marginBottom: 10,
-        textAlign: "center",
-      }}>
-        Share your score
-      </div>
+      {postState === "posted" ? null : collapsible ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="az-tap"
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            color: "var(--color-muted)",
+            fontFamily: "var(--font-display)",
+            fontSize: 12,
+            fontWeight: 800,
+            textTransform: "uppercase",
+            letterSpacing: 1,
+            padding: "4px 0",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          🏆 Share your score
+          <span aria-hidden="true" style={{ fontSize: 10 }}>{expanded ? "▲" : "▼"}</span>
+        </button>
+      ) : (
+        <div style={{
+          fontFamily: "var(--font-display)",
+          fontSize: 11,
+          fontWeight: 800,
+          color: "var(--color-muted)",
+          textTransform: "uppercase",
+          letterSpacing: 1.2,
+          marginBottom: 10,
+          textAlign: "center",
+        }}>
+          Share your score
+        </div>
+      )}
+      {showContent && (
+      <div style={{ marginTop: collapsible && postState !== "posted" ? 12 : 0 }}>
       {postState === "cooldown" ? (
         <div style={{
           padding: "14px 8px",
@@ -1516,6 +1597,16 @@ function PostScoreCard({ score, onViewFame }) {
                 : "That score can't be posted"}
             </div>
           )}
+          {note && (
+            <div style={{
+              marginTop: 10,
+              color: "var(--color-muted)",
+              fontSize: 11.5,
+              fontWeight: 600,
+              textAlign: "center",
+              lineHeight: 1.4,
+            }}>{note}</div>
+          )}
         </>
       ) : (
         <>
@@ -1533,7 +1624,7 @@ function PostScoreCard({ score, onViewFame }) {
           }}>✅ Posted!</div>
           {onViewFame && (
             <button
-              onClick={() => onViewFame({ name: postedName, score })}
+              onClick={() => onViewFame({ name: postedName, score, ...(fameMeta || {}) })}
               className="az-tap"
               style={{
                 width: "100%",
@@ -1548,7 +1639,37 @@ function PostScoreCard({ score, onViewFame }) {
               }}
             >🏆 View Wall of Fame →</button>
           )}
+          {onContinue && continueLabel && (
+            <div style={{ marginTop: 14, textAlign: "center" }}>
+              <div style={{
+                color: "var(--color-sun-deep)",
+                fontFamily: "var(--font-display)",
+                fontWeight: 800,
+                fontSize: 13.5,
+                marginBottom: 8,
+              }}>Keep going for a higher total!</div>
+              <button
+                onClick={onContinue}
+                className="az-tap"
+                style={{
+                  width: "100%",
+                  background: continueGradient || "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
+                  color: "#fff",
+                  border: "none",
+                  padding: "15px",
+                  borderRadius: 16,
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800, fontSize: 17,
+                  cursor: "pointer",
+                  boxShadow: continueGlow || "var(--shadow-glow-sun)",
+                  minHeight: 54,
+                }}
+              >{continueLabel}</button>
+            </div>
+          )}
         </>
+      )}
+      </div>
       )}
     </div>
   );
@@ -1627,6 +1748,18 @@ function BossResults({ score, total, passed, cumulative, onRetry, onBack, onView
           color: "var(--color-sun-deep)",
         }}>Boss: {points}/{levelMax}</div>
       </div>
+
+      {passed && (
+        <p style={{
+          color: "var(--color-sun-deep)",
+          fontFamily: "var(--font-display)",
+          fontSize: 15.5,
+          fontWeight: 800,
+          lineHeight: 1.4,
+          margin: "0 auto 16px",
+          maxWidth: 340,
+        }}>🏆 You completed all levels! Your total: {cumulative}/{CHALLENGE_MAX}</p>
+      )}
 
       <ScoreTally levelName="Boss" points={points} levelMax={levelMax} cumulative={cumulative} />
       <PostScoreCard score={cumulative} onViewFame={onViewFame} />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Fragment } from "react";
 import Catch from "./Catch";
 import Challenge from "./Challenge";
 import Hangman from "./Hangman";
@@ -668,6 +668,35 @@ function WallOfFame({ onNav, initialTab, highlight }) {
   // Scroll the highlighted row into view once scores load.
   const highlightRef = useRef(null);
 
+  // "Continue →" pill shown beneath the player's just-posted Challenge row when
+  // there are still levels left to play (set via highlight.canContinue). Tapping
+  // it returns to the Challenge level-select so they can pick the next level.
+  const renderContinuePill = () => {
+    if (!highlight?.canContinue) return null;
+    return (
+      <div style={{ textAlign: "center", margin: "-2px 0 10px" }}>
+        <button
+          onClick={() => onNav("quiz")}
+          className="az-tap"
+          aria-label="Continue to the next Challenge level"
+          style={{
+            background: highlight.continueGradient || "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
+            color: "#fff",
+            border: "none",
+            padding: "7px 16px",
+            borderRadius: 999,
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 13,
+            cursor: "pointer",
+            boxShadow: "var(--shadow-sm)",
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >Continue →</button>
+      </div>
+    );
+  };
+
   // On the combined Catch board, tag each row with the mode it came from.
   // `textColor` matches the row's text so the Classic pill stays legible on
   // both the colored podium and the dark list.
@@ -905,8 +934,8 @@ function WallOfFame({ onNav, initialTab, highlight }) {
               const c = PODIUM_STYLES[i];
               const hl = isHighlighted(entry);
               return (
+                <Fragment key={entry.id}>
                 <div
-                  key={entry.id}
                   ref={hl ? highlightRef : null}
                   style={{
                     background: c.bg,
@@ -948,6 +977,8 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                     lineHeight: 1,
                   }}>{entry.score}</div>
                 </div>
+                {hl && renderContinuePill()}
+                </Fragment>
               );
             })}
           </div>
@@ -966,8 +997,8 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                 const striped = i % 2 === 0;
                 const hl = isHighlighted(entry);
                 return (
+                  <Fragment key={entry.id}>
                   <div
-                    key={entry.id}
                     ref={hl ? highlightRef : null}
                     style={{
                       display: "flex", alignItems: "center", gap: 12,
@@ -1009,6 +1040,8 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                       color: "var(--color-text)",
                     }}>{entry.score}</div>
                   </div>
+                  {hl && renderContinuePill()}
+                  </Fragment>
                 );
               })}
             </div>
