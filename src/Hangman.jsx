@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio } from "./audio";
 import { validatePost } from "./validation";
+import { trackEvent } from "./analytics";
 
 // ─── Constants ──────────────────────────
 const PLAYER_NAME_KEY = "azidioms_player_name";
@@ -275,6 +276,7 @@ function EndScreen({ score, highScore, newHigh, onPlay, onBack, onViewFame }) {
         .from("scores")
         .insert({ name: cleanName, score, mode: "hangman" });
       if (error) throw error;
+      trackEvent("score_posted", JSON.stringify({ mode: "hangman", score, name: cleanName }));
       savePlayerName(cleanName);
       setPostedName(cleanName);
       try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
@@ -556,6 +558,9 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
   const hintTriggeredRef = useRef(false);
   const advanceTimerRef = useRef(null);
   const prevWrongRef = useRef(0); // tracks wrongCount to detect a new wrong guess
+  // Per-game round tallies for the hangman_ended analytics event.
+  const roundsWonRef = useRef(0);
+  const roundsLostRef = useRef(0);
 
   const ready = cutouts && cutouts.length > 0;
   const currentIdiom = shuffled[roundIdx];
@@ -580,6 +585,9 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
     wonRef.current = false;
     lostRef.current = false;
     hintTriggeredRef.current = false;
+    roundsWonRef.current = 0;
+    roundsLostRef.current = 0;
+    trackEvent("hangman_started");
     setPhase("playing");
   }, [idioms]);
 
@@ -587,6 +595,11 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
   const finishGame = useCallback((finalScore) => {
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     cancelAudio();
+    trackEvent("hangman_ended", JSON.stringify({
+      score: finalScore,
+      rounds_won: roundsWonRef.current,
+      rounds_lost: roundsLostRef.current,
+    }));
     setHighScore((h) => {
       if (finalScore > h) {
         saveHigh(finalScore);
@@ -628,6 +641,7 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
 
     if (won && !wonRef.current) {
       wonRef.current = true;
+      roundsWonRef.current += 1;
       const points = roundValueFor(wrongCount, false);
       const next = score + points;
       setScore(next);
@@ -651,6 +665,7 @@ export default function Hangman({ cutouts, idioms, onBack, onViewFame, onMusicPa
 
     if (lost && !lostRef.current) {
       lostRef.current = true;
+      roundsLostRef.current += 1;
       wrongSound();
       setRoundFeedback("lost");
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);

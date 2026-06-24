@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio } from "./audio";
 import { validatePost } from "./validation";
+import { trackEvent } from "./analytics";
 
 const POST_COOLDOWN_MS = 30_000;
 
@@ -321,6 +322,7 @@ function EndScreen({ score, highScore, newHigh, gameMode, correctCount, speedLev
         .from("scores")
         .insert({ name: cleanName, score, mode: postMode });
       if (error) throw error;
+      trackEvent("score_posted", JSON.stringify({ mode: postMode, score, name: cleanName }));
       savePlayerName(cleanName);
       setPostedName(cleanName);
       try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
@@ -743,6 +745,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     getAudioCtx(); // create / resume audio context inside the user gesture
     setGameMode(m);
     gameModeRef.current = m;
+    trackEvent("catch_started", JSON.stringify({ mode: m }));
     setShuffled(shuffle(idioms));
     setScore(0);
     setCombo(1);
@@ -782,6 +785,12 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     setFlash(null);
     const final = scoreRef.current;
     const isTurbo = gameModeRef.current === "turbo";
+    trackEvent("catch_ended", JSON.stringify({
+      mode: isTurbo ? "turbo" : "classic",
+      score: final,
+      correct_count: correctCountRef.current,
+      ...(isTurbo ? { speed_level: Math.floor(correctCountRef.current / TURBO_RAMP_EVERY) + 1 } : {}),
+    }));
     const setHigh = isTurbo ? setHighScoreTurbo : setHighScore;
     const key = isTurbo ? HIGHSCORE_TURBO_KEY : HIGHSCORE_KEY;
     setHigh((h) => {

@@ -4,6 +4,7 @@ import Challenge from "./Challenge";
 import Hangman from "./Hangman";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio } from "./audio";
+import { trackEvent } from "./analytics";
 
 const IDIOMS = [
   {
@@ -1132,6 +1133,12 @@ function LearningWindow({ initialId, cutouts, onClose }) {
   const current = ordered[idx];
   const cutout = cutouts.find((c) => c.id === current.id);
 
+  // Analytics: when the modal opened, and the idiom currently on screen, so the
+  // close event can report dwell time + the last idiom viewed.
+  const openedAtRef = useRef(Date.now());
+  const currentIdRef = useRef(current.id);
+  useEffect(() => { currentIdRef.current = current.id; }, [current.id]);
+
   // Polish translations — keyed by 2-digit idiom id
   const plKey = String(current.id).padStart(2, "0");
   const literalPL    = LITERAL_PL[plKey];
@@ -1154,6 +1161,10 @@ function LearningWindow({ initialId, cutouts, onClose }) {
 
   const handleClose = useCallback(() => {
     if (closing) return;
+    trackEvent("learning_window_closed", JSON.stringify({
+      idiom_id: currentIdRef.current,
+      time_spent_ms: Date.now() - openedAtRef.current,
+    }));
     setClosing(true);
     cancelAudio();
     if (closeTimerRef.current != null) clearTimeout(closeTimerRef.current);
@@ -1393,7 +1404,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
           <LearningSection title="Meaning" color="var(--color-grape)">
             {!meaningRevealed ? (
               <button
-                onClick={() => setMeaningRevealed(true)}
+                onClick={() => { setMeaningRevealed(true); trackEvent("learning_section_revealed", JSON.stringify({ idiom_id: current.id, section: "meaning" })); }}
                 aria-label="Reveal meaning"
                 aria-expanded="false"
                 className="az-tap"
@@ -1432,7 +1443,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
           <LearningSection title="Example" color="var(--color-leaf)">
             {!exampleRevealed ? (
               <button
-                onClick={() => setExampleRevealed(true)}
+                onClick={() => { setExampleRevealed(true); trackEvent("learning_section_revealed", JSON.stringify({ idiom_id: current.id, section: "example" })); }}
                 aria-label="See the example"
                 aria-expanded="false"
                 className="az-tap"
@@ -1518,7 +1529,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             >
               {!equivalentRevealed ? (
                 <button
-                  onClick={() => setEquivalentRevealed(true)}
+                  onClick={() => { setEquivalentRevealed(true); trackEvent("learning_section_revealed", JSON.stringify({ idiom_id: current.id, section: "equivalent" })); }}
                   aria-label="Reveal Polish equivalent"
                   aria-expanded="false"
                   className="az-tap"
@@ -1554,7 +1565,7 @@ function LearningWindow({ initialId, cutouts, onClose }) {
             <LearningSection title="💡 Did you know?" color="var(--color-sun-deep)">
               {!funFactRevealed ? (
                 <button
-                  onClick={() => setFunFactRevealed(true)}
+                  onClick={() => { setFunFactRevealed(true); trackEvent("learning_section_revealed", JSON.stringify({ idiom_id: current.id, section: "funfact" })); }}
                   aria-label="Reveal fun fact"
                   aria-expanded="false"
                   className="az-tap"
@@ -1739,6 +1750,8 @@ export default function App() {
 
   // Open the learning-window modal for a specific idiom (used by landing zone taps)
   const openZoneIdiom = useCallback((id) => {
+    const it = IDIOMS.find((i) => i.id === id);
+    trackEvent("character_tapped", JSON.stringify({ idiom_id: id, idiom_name: it?.name }));
     setLearningIdiomId(id);
   }, []);
 
@@ -1932,6 +1945,7 @@ export default function App() {
       }
     }
     try { sessionStorage.setItem("azidioms_entered", "1"); } catch (_) { /* ignore */ }
+    trackEvent("splash_entered");
     setSplashHidden(true);          // fade overlay opacity → 0 (~400ms)
     setContentBlur("blur(0px)");    // clear the site blur over the same window
     setTimeout(() => {
@@ -1968,6 +1982,13 @@ export default function App() {
     if (p === "leaderboard") {
       setFameTab(meta?.tab || "catch");
       setFameHighlight(meta?.highlight || null);
+      // A highlight means they arrived from posting in a game; otherwise it's a
+      // direct visit from the nav bar.
+      const source = meta?.highlight ? (meta?.tab || "catch") : "direct";
+      trackEvent("wall_of_fame_viewed", JSON.stringify({ tab: meta?.tab || "catch", source }));
+    }
+    if (p === "games" || p === "quiz" || p === "leaderboard") {
+      trackEvent("page_visited", JSON.stringify({ page: p }));
     }
     setPage(p);
   };

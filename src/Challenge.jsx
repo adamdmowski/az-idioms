@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase, supabaseConfigured } from "./supabase";
 import { playForIdiom, cancelAudio } from "./audio";
 import { validatePost } from "./validation";
+import { trackEvent } from "./analytics";
 
 const POST_COOLDOWN_MS = 30_000;
 const COOLDOWN_KEY = "azidioms_last_post_challenge_at";
@@ -594,6 +595,12 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       // On the FIRST wrong of the original run, queue this for replay review
       if (attempts === 0 && !inReplay) {
         setMissedQuestions((m) => [...m, question]);
+        trackEvent("challenge_question_wrong", JSON.stringify({
+          level,
+          question_number: questionIdx + 1,
+          idiom_id: question.idiom.id,
+          idiom_name: question.idiom.name,
+        }));
       }
       wrongSound();
       setFeedback("wrong");
@@ -672,6 +679,12 @@ function LevelPlay({ level, questions, cutouts, onComplete, onBackToLevels }) {
       setLockedSlots(nextLocked);
       if (attempts === 0 && !inReplay) {
         setMissedQuestions((m) => [...m, question]);
+        trackEvent("challenge_question_wrong", JSON.stringify({
+          level,
+          question_number: questionIdx + 1,
+          idiom_id: question.idiom.id,
+          idiom_name: question.idiom.name,
+        }));
       }
       wrongSound();
       setFeedback("wrong");
@@ -1447,6 +1460,7 @@ function PostScoreCard({
         .from("scores")
         .insert({ name: cleanName, score, mode: "challenge" });
       if (error) throw error;
+      trackEvent("score_posted", JSON.stringify({ mode: "challenge", score, name: cleanName }));
       savePlayerName(cleanName);
       setPostedName(cleanName);
       try { localStorage.setItem(COOLDOWN_KEY, String(Date.now())); } catch (_) { /* ignore */ }
@@ -1830,6 +1844,7 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
 
   const startLevel = useCallback((levelId) => {
     getAudioCtx(); // initialize audio inside the user-gesture (tap)
+    trackEvent("challenge_level_started", JSON.stringify({ level: levelId }));
     const qs = generateQuestions(levelId, idioms);
     setCurrentLevel(levelId);
     setQuestions(qs);
@@ -1845,6 +1860,14 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
 
   const handleComplete = useCallback((score) => {
     setLastScore(score);
+    const totalQuestions = currentLevel === "boss" ? 10 : 14;
+    const passThreshold = currentLevel === "boss" ? BOSS_PASS_THRESHOLD : LEVEL_PASS_THRESHOLD;
+    trackEvent("challenge_level_completed", JSON.stringify({
+      level: currentLevel,
+      score,
+      passed: score >= passThreshold,
+      total_questions: totalQuestions,
+    }));
     // Record this level's best raw score toward the cumulative total. Keeping
     // the max means a failed-then-retried level, or a replayed completed level,
     // only ever raises (never lowers) the running total.
@@ -1870,9 +1893,17 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
     setPhase("select");
   }, []);
 
+  // "Back to levels" tapped from a results screen (distinct from the in-game
+  // "← Levels" button, which doesn't fire this).
+  const handleQuitFromResults = useCallback(() => {
+    trackEvent("challenge_quit_after_results", JSON.stringify({ level: currentLevel, score: lastScore }));
+    handleBackToLevels();
+  }, [currentLevel, lastScore, handleBackToLevels]);
+
   const handleContinue = useCallback(() => {
     const next = nextLevel(currentLevel);
     if (next) {
+      trackEvent("challenge_continued", JSON.stringify({ from_level: currentLevel, to_level: next }));
       startLevel(next);
     } else {
       handleBackToLevels();
@@ -1927,7 +1958,7 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
         passed={passed}
         cumulative={cumulativeScore}
         onRetry={handleRetry}
-        onBack={handleBackToLevels}
+        onBack={handleQuitFromResults}
         onViewFame={onViewFame}
       />
     );
@@ -1941,7 +1972,7 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
       cumulative={cumulativeScore}
       onContinue={handleContinue}
       onRetry={handleRetry}
-      onBack={handleBackToLevels}
+      onBack={handleQuitFromResults}
       onViewFame={onViewFame}
     />
   );
