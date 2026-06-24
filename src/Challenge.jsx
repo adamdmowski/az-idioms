@@ -1171,7 +1171,103 @@ function ScoreTally({ levelName, points, levelMax, cumulative }) {
   );
 }
 
-function LevelResults({ level, score, total, passed, cumulative, onContinue, onRetry, onBack, onViewFame }) {
+// Per-level max points: 14 questions × 10 for Easy/Medium/Hard, 10 × 10 for Boss.
+const LEVEL_MAX_POINTS = { easy: 140, medium: 140, hard: 140, boss: 100 };
+
+// Same unlock gating as LevelSelect, reused by the results-screen tracker.
+function isLevelUnlocked(id, progress) {
+  if (id === "easy") return true;
+  if (id === "medium") return !!progress.easy;
+  if (id === "hard")   return !!progress.medium;
+  if (id === "boss")   return !!progress.hard;
+  return false;
+}
+
+// Attention-cue keyframes for the results screen. The global
+// prefers-reduced-motion rule in index.css neutralises these automatically.
+const RESULTS_ANIM_CSS = `
+@keyframes azNextPulse {
+  0%, 100% { opacity: 1; transform: translateX(0); }
+  50%      { opacity: 0.5; transform: translateX(3px); }
+}
+@keyframes azContinueNudge {
+  0%, 100% { transform: translateX(0); }
+  50%      { transform: translateX(4px); }
+}
+@keyframes azBtnPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.025); }
+}
+`;
+
+// Horizontal 4-level progress summary so the kid sees how much is left. `level`
+// is the just-finished level (highlighted); when `passed`, the next level shows
+// a pulsing "NEXT →" cue. Scores are this session's best (from levelScores).
+function LevelTracker({ level, levelScores, progress, passed }) {
+  const next = passed ? nextLevel(level) : null;
+  return (
+    <div style={{ width: "100%", maxWidth: 380, margin: "0 auto 18px" }}>
+      <style>{RESULTS_ANIM_CSS}</style>
+      <div style={{ display: "flex", gap: 6 }}>
+        {ORDER.map((id) => {
+          const def = levelByid(id);
+          const max = LEVEL_MAX_POINTS[id];
+          const played = Object.prototype.hasOwnProperty.call(levelScores, id);
+          const points = (levelScores[id] || 0) * 10;
+          const unlocked = isLevelUnlocked(id, progress);
+          const isCurrent = id === level;
+          const isNext = id === next;
+          const icon = !unlocked ? "🔒" : played ? "⭐" : "☆";
+          const shortName = id.charAt(0).toUpperCase() + id.slice(1);
+          return (
+            <div key={id} style={{
+              flex: 1,
+              minWidth: 0,
+              background: isCurrent ? "rgba(245, 158, 11, 0.14)" : "var(--color-card)",
+              border: isCurrent ? "2px solid var(--color-sun)" : "1px solid var(--color-line)",
+              borderRadius: 12,
+              padding: "8px 3px 7px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2,
+              boxShadow: isCurrent ? "0 0 0 3px rgba(245, 158, 11, 0.16)" : "none",
+              opacity: unlocked ? 1 : 0.6,
+            }} aria-label={`${def?.name || shortName}: ${played ? `${points} points` : !unlocked ? "locked" : "not done yet"}`}>
+              <span aria-hidden="true" style={{ fontSize: 17, lineHeight: 1 }}>{icon}</span>
+              <span style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 10.5,
+                fontWeight: 800,
+                color: isCurrent ? "var(--color-sun-deep)" : "var(--color-text)",
+                whiteSpace: "nowrap",
+              }}>{shortName}</span>
+              <span style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 12,
+                fontWeight: 800,
+                color: played ? "var(--color-leaf)" : "var(--color-muted)",
+              }}>{played ? points : `/${max}`}</span>
+              {isNext && (
+                <span aria-hidden="true" style={{
+                  marginTop: 1,
+                  fontFamily: "var(--font-display)",
+                  fontSize: 8.5,
+                  fontWeight: 800,
+                  letterSpacing: 0.3,
+                  color: "var(--color-sun-deep)",
+                  animation: "azNextPulse 1.1s ease-in-out infinite",
+                }}>NEXT →</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LevelResults({ level, score, total, passed, cumulative, levelScores, progress, onContinue, onRetry, onBack, onViewFame }) {
   const points = score * 10;       // this level's score, 0..(total*10)
   const levelMax = total * 10;     // 140 for Easy/Medium/Hard
   const stars =
@@ -1232,6 +1328,7 @@ function LevelResults({ level, score, total, passed, cumulative, onContinue, onR
         </div>
 
         {tally}
+        <LevelTracker level={level} levelScores={levelScores} progress={progress} passed={false} />
         <PostScoreCard score={cumulative} onViewFame={onViewFame} />
 
         <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 320, margin: "0 auto" }}>
@@ -1309,26 +1406,42 @@ function LevelResults({ level, score, total, passed, cumulative, onContinue, onR
 
       {tally}
 
+      {/* All 4 levels at a glance — shows how much is still left to play. */}
+      <LevelTracker level={level} levelScores={levelScores} progress={progress} passed={passed} />
+
       {/* Warm nudge: posting isn't the end — keep playing for a bigger total. */}
       {nextDef && (
-        <p style={{
-          color: "var(--color-sun-deep)",
-          fontFamily: "var(--font-display)",
-          fontSize: 15,
-          fontWeight: 800,
-          lineHeight: 1.4,
-          margin: "0 auto 18px",
-          maxWidth: 340,
-        }}>🎯 Keep going! Complete all levels for a higher total score!</p>
+        <div style={{ margin: "0 auto 18px", maxWidth: 340 }}>
+          <p style={{
+            color: "var(--color-sun-deep)",
+            fontFamily: "var(--font-display)",
+            fontSize: 15,
+            fontWeight: 800,
+            lineHeight: 1.4,
+            margin: 0,
+          }}>🎯 Keep going! Complete all levels for a higher total score!</p>
+          <p style={{
+            color: "var(--color-muted)",
+            fontSize: 12.5,
+            fontWeight: 600,
+            fontStyle: "italic",
+            lineHeight: 1.4,
+            margin: "4px 0 0",
+          }}>Graj dalej! Ukończ wszystkie poziomy, żeby zdobyć więcej punktów!</p>
+        </div>
       )}
 
-      {/* PRIMARY action — the most visually dominant element on the screen. */}
+      {/* PRIMARY action — the most visually dominant element on the screen.
+          Gently pulses with a nudging arrow to pull a young kid's eye. */}
       {nextDef && (
         <button
           onClick={onContinue}
           className="az-tap"
           style={{
-            display: "block",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
             width: "100%",
             maxWidth: 360,
             margin: "0 auto 16px",
@@ -1342,15 +1455,21 @@ function LevelResults({ level, score, total, passed, cumulative, onContinue, onR
             cursor: "pointer",
             boxShadow: nextDef.glow,
             minHeight: 62,
+            animation: "azBtnPulse 1.6s ease-in-out infinite",
           }}
-        >Continue to {nextDef.name} →</button>
+        >
+          <span>Continue to {nextDef.name}</span>
+          <span aria-hidden="true" style={{
+            display: "inline-block",
+            animation: "azContinueNudge 0.9s ease-in-out infinite",
+          }}>➡️</span>
+        </button>
       )}
 
-      {/* SECONDARY — de-emphasised, collapsible posting card. */}
+      {/* Always-visible posting card — name input + Post button shown directly. */}
       <PostScoreCard
         score={cumulative}
         onViewFame={onViewFame}
-        collapsible
         note="You can post now or after completing all levels."
         fameMeta={nextDef ? { canContinue: true, continueGradient: nextDef.gradient } : null}
         onContinue={nextDef ? onContinue : null}
@@ -1692,7 +1811,7 @@ function PostScoreCard({
 // ─── Boss Results ──────────
 const BOSS_PASS_THRESHOLD = 7; // out of 10 — required to mark the Boss as completed
 
-function BossResults({ score, total, passed, cumulative, onRetry, onBack, onViewFame }) {
+function BossResults({ score, total, passed, cumulative, levelScores, progress, onRetry, onBack, onViewFame }) {
   // score is correctCount (0..10). This level's points are score × 10 (0..100);
   // the posted score is the cumulative total across all levels.
   const points = score * 10;
@@ -1764,16 +1883,27 @@ function BossResults({ score, total, passed, cumulative, onRetry, onBack, onView
       </div>
 
       {passed && (
-        <p style={{
-          color: "var(--color-sun-deep)",
-          fontFamily: "var(--font-display)",
-          fontSize: 15.5,
-          fontWeight: 800,
-          lineHeight: 1.4,
-          margin: "0 auto 16px",
-          maxWidth: 340,
-        }}>🏆 You completed all levels! Your total: {cumulative}/{CHALLENGE_MAX}</p>
+        <div style={{ margin: "0 auto 16px", maxWidth: 340 }}>
+          <p style={{
+            color: "var(--color-sun-deep)",
+            fontFamily: "var(--font-display)",
+            fontSize: 15.5,
+            fontWeight: 800,
+            lineHeight: 1.4,
+            margin: 0,
+          }}>🏆 You completed all levels!</p>
+          <p style={{
+            color: "var(--color-muted)",
+            fontSize: 12.5,
+            fontWeight: 600,
+            fontStyle: "italic",
+            lineHeight: 1.4,
+            margin: "4px 0 0",
+          }}>🏆 Ukończyłeś wszystkie poziomy!</p>
+        </div>
       )}
+
+      <LevelTracker level="boss" levelScores={levelScores} progress={progress} passed={passed} />
 
       <ScoreTally levelName="Boss" points={points} levelMax={levelMax} cumulative={cumulative} />
       <PostScoreCard score={cumulative} onViewFame={onViewFame} />
@@ -1957,6 +2087,8 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
         total={10}
         passed={passed}
         cumulative={cumulativeScore}
+        levelScores={levelScores}
+        progress={progress}
         onRetry={handleRetry}
         onBack={handleQuitFromResults}
         onViewFame={onViewFame}
@@ -1970,6 +2102,8 @@ export default function Challenge({ idioms, cutouts, onBack, onViewFame, onMusic
       total={14}
       passed={passed}
       cumulative={cumulativeScore}
+      levelScores={levelScores}
+      progress={progress}
       onContinue={handleContinue}
       onRetry={handleRetry}
       onBack={handleQuitFromResults}
