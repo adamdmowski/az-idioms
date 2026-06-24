@@ -1046,7 +1046,13 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   // ── Tap handlers ──
   const handleCorrect = useCallback((floater) => {
     lockedRef.current = true;
+    // Consume EVERY on-screen copy of this idiom, not just the tapped one.
+    // Adding their keys to tappedKeysRef makes the RAF loop skip them, so the
+    // leftover correct copies can never reach the left edge and trip "Missed!".
     tappedKeysRef.current.add(floater.key);
+    floatersRef.current.forEach((f) => {
+      if (f.idiomId === floater.idiomId) tappedKeysRef.current.add(f.key);
+    });
     const c = comboRef.current;
     // Speed bonus: faster taps (since the prompt appeared) earn more.
     const elapsed = (performance.now() - promptStartTimeRef.current) / 1000;
@@ -1064,8 +1070,9 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
     advanceTimerRef.current = setTimeout(() => {
       advanceTimerRef.current = null;
-      // Remove just THIS floater — the rest of the stream keeps flowing.
-      setFloaters((prev) => prev.filter((f) => f.key !== floater.key));
+      // Remove this floater AND every other on-screen copy of the same idiom;
+      // the rest of the stream keeps flowing.
+      setFloaters((prev) => prev.filter((f) => f.idiomId !== floater.idiomId));
       setFlash(null);
       lockedRef.current = false;
       setPromptIdx((p) => p + 1);
