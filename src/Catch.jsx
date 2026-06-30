@@ -667,6 +667,8 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const pauseStartRef = useRef(0);              // wall-clock when the pause began
   const spawnTickRef = useRef(null);            // spawn scheduler, exposed so resume can restart it
   const missPendingRef = useRef(false);         // turbo: a missed-correct game over is already scheduled
+  const doSpawnRef = useRef(null);              // current spawn fn, exposed so the prompt-change effect can force-spawn the correct character
+  const forceSpawnTimerRef = useRef(null);      // pending "fresh correct character" spawn after a prompt change
 
   // Sync refs with state so RAF / setInterval closures see current values
   useEffect(() => { floatersRef.current = floaters; }, [floaters]);
@@ -775,6 +777,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
   const finishGame = useCallback(() => {
     if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
     if (spawnTimerRef.current) { clearTimeout(spawnTimerRef.current); spawnTimerRef.current = null; }
+    if (forceSpawnTimerRef.current) { clearTimeout(forceSpawnTimerRef.current); forceSpawnTimerRef.current = null; }
     if (advanceTimerRef.current) { clearTimeout(advanceTimerRef.current); advanceTimerRef.current = null; }
     if (flashClearTimerRef.current) { clearTimeout(flashClearTimerRef.current); flashClearTimerRef.current = null; }
     cancelAudio();
@@ -839,6 +842,28 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     const idiom = shuffled[promptIdx];
     if (!idiom) return;
     promptStartTimeRef.current = performance.now(); // reset the speed-bonus timer
+
+    // Part A — any on-screen character matching the NEW idiom is a leftover
+    // distractor from the previous prompt (it may be near the left edge and
+    // about to exit). Consume it now: add to the tapped/exited set so the RAF
+    // loop skips it (and never counts it as a Turbo miss), and drop it from the
+    // floater list so it disappears. The player gets a fresh target instead.
+    floatersRef.current.forEach((f) => {
+      if (f.idiomId === idiom.id) tappedKeysRef.current.add(f.key);
+    });
+    setFloaters((prev) => prev.filter((f) => f.idiomId !== idiom.id));
+
+    // Part B — guarantee a fresh correct character enters from the right shortly
+    // after the prompt changes, independent of the normal spawn cadence, so the
+    // player always sees a new target arriving with full crossing time to react.
+    if (forceSpawnTimerRef.current) clearTimeout(forceSpawnTimerRef.current);
+    forceSpawnTimerRef.current = setTimeout(() => {
+      forceSpawnTimerRef.current = null;
+      if (pausedRef.current) return;
+      const correct = shuffledRef.current[promptIdxRef.current];
+      if (correct && doSpawnRef.current) doSpawnRef.current(correct);
+    }, 250);
+
     playForIdiom(idiom, "name");
   }, [phase, promptIdx, shuffled, gameMode, idioms, finishGame]);
 
@@ -847,7 +872,9 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     if (phase !== "playing") return;
     if (shuffled.length === 0) return;
 
-    const doSpawn = () => {
+    // forced: when set, spawn this exact idiom (used by Part B to drop a fresh
+    // correct character in right after a prompt change). Otherwise pick normally.
+    const doSpawn = (forced) => {
       const playArea = playAreaRef.current;
       if (!playArea) return;
       const playW = playArea.offsetWidth;
@@ -857,10 +884,14 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
       const correctIdiom = shuffledRef.current[promptIdxRef.current];
       if (!correctIdiom) return;
 
-      // Pick the idiom for this spawn. Guarantee the correct one appears at
-      // least every MAX_DISTRACTORS_BEFORE_CORRECT spawns; otherwise random.
+      // Pick the idiom for this spawn. A forced spawn always uses the given
+      // idiom; otherwise guarantee the correct one appears at least every
+      // MAX_DISTRACTORS_BEFORE_CORRECT spawns, else random.
       let idiomForSpawn;
-      if (spawnsSinceCorrectRef.current >= MAX_DISTRACTORS_BEFORE_CORRECT) {
+      if (forced) {
+        idiomForSpawn = forced;
+        spawnsSinceCorrectRef.current = 0;
+      } else if (spawnsSinceCorrectRef.current >= MAX_DISTRACTORS_BEFORE_CORRECT) {
         idiomForSpawn = correctIdiom;
         spawnsSinceCorrectRef.current = 0;
       } else if (Math.random() < CORRECT_SPAWN_CHANCE) {
@@ -907,6 +938,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
 
       setFloaters((prev) => [...prev, newFloater]);
     };
+    doSpawnRef.current = doSpawn; // let the prompt-change effect force-spawn (Part B)
 
     if (!pausedRef.current) doSpawn(); // first floater appears immediately
     // Self-rescheduling timeout (not setInterval) so the cadence can tighten
@@ -968,7 +1000,10 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
           exited.push(f.key);
           // Turbo only: letting the CURRENT correct character escape ends the
           // game. lockedRef guards the post-correct-tap window so a just-answered
-          // prompt's leftover correct floater doesn't count as a miss.
+          // prompt's leftover correct floater doesn't count as a miss. Leftover
+          // distractors that match a NEW prompt are already cleared on prompt
+          // change (Part A), so any matching character reaching the edge here is
+          // genuinely a fresh target the player let slip.
           if (gameModeRef.current === "turbo" && !lockedRef.current && !missPendingRef.current) {
             const correct = shuffledRef.current[promptIdxRef.current];
             if (correct && f.idiomId === correct.id) {
@@ -1131,6 +1166,7 @@ export default function Catch({ cutouts, idioms, onBack, onViewFame, onMusicPaus
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (spawnTimerRef.current) clearTimeout(spawnTimerRef.current);
+      if (forceSpawnTimerRef.current) clearTimeout(forceSpawnTimerRef.current);
       if (advanceTimerRef.current) clearTimeout(advanceTimerRef.current);
       if (flashClearTimerRef.current) clearTimeout(flashClearTimerRef.current);
       confettiTimers.forEach((t) => clearTimeout(t));

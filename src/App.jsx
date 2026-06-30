@@ -669,36 +669,6 @@ function WallOfFame({ onNav, initialTab, highlight }) {
   // Scroll the highlighted row into view once scores load.
   const highlightRef = useRef(null);
 
-  // "Continue to <next> →" pill shown beneath the player's just-posted Challenge
-  // row when levels remain (set via highlight.canContinue). Tapping it jumps
-  // straight into the next level, carrying the level id through handleNav.
-  const renderContinuePill = () => {
-    if (!highlight?.canContinue) return null;
-    const label = highlight.continueLabel || "Continue →";
-    return (
-      <div style={{ textAlign: "center", margin: "-2px 0 10px" }}>
-        <button
-          onClick={() => onNav("quiz", { startLevel: highlight.continueLevel })}
-          className="az-tap"
-          aria-label={label}
-          style={{
-            background: highlight.continueGradient || "linear-gradient(135deg, var(--color-sun), var(--color-sun-deep))",
-            color: "#fff",
-            border: "none",
-            padding: "7px 16px",
-            borderRadius: 999,
-            fontFamily: "var(--font-display)",
-            fontWeight: 800,
-            fontSize: 13,
-            cursor: "pointer",
-            boxShadow: "var(--shadow-sm)",
-            WebkitTapHighlightColor: "transparent",
-          }}
-        >{label}</button>
-      </div>
-    );
-  };
-
   // On the combined Catch board, tag each row with the mode it came from.
   // `textColor` matches the row's text so the Classic pill stays legible on
   // both the colored podium and the dark list.
@@ -979,7 +949,6 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                     lineHeight: 1,
                   }}>{entry.score}</div>
                 </div>
-                {hl && renderContinuePill()}
                 </Fragment>
               );
             })}
@@ -1042,7 +1011,6 @@ function WallOfFame({ onNav, initialTab, highlight }) {
                       color: "var(--color-text)",
                     }}>{entry.score}</div>
                   </div>
-                  {hl && renderContinuePill()}
                   </Fragment>
                 );
               })}
